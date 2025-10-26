@@ -1,2 +1,2 @@
-local tfling = require("tfling")
+local tfling = require("./lua/tfling")
 return tfling
