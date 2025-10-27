@@ -9,6 +9,8 @@ local active_instances = {}
 local util = require("tfling.util")
 local get_selected_text = util.get_selected_text
 
+---
+-- Sets default win config
 --- @param opts termSplitWin | termFloatingWin
 function Terminal:_apply_defaults(opts)
 	if opts.type == "floating" then
@@ -777,7 +779,7 @@ end, {
 	desc = "Resize the current terminal window",
 })
 
-vim.api.nvim_create_user_command("termRepositionCurrent", function(opts)
+vim.api.nvim_create_user_command("TermRepositionCurrent", function(opts)
 	local current_win = vim.api.nvim_get_current_win()
 	local current_buf = vim.api.nvim_get_current_buf()
 	local term_instance = active_instances[current_win]
