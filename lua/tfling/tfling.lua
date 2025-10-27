@@ -1,6 +1,7 @@
 -- File: lua/floating_term.lua
 
 local M = {}
+
 local Terminal = {}
 Terminal.__index = Terminal
 local active_instances = {}
@@ -8,14 +9,45 @@ local active_instances = {}
 local util = require("tfling.util")
 local get_selected_text = util.get_selected_text
 
+--- @param opts termSplitWin | termFloatingWin
+function Terminal:_apply_defaults(opts)
+	if opts.type == "floating" then
+		if opts.height == nil then
+			opts.height = "80%"
+		end
+		if opts.width == nil then
+			opts.width = "80%"
+		end
+		if opts.position == nil then
+			opts.position = "top-center"
+		end
+		if opts.margin == nil then
+			opts.margin = "5%"
+		end
+	elseif opts.type == "split" then
+		if opts.direction == nil then
+			opts.direction = "right"
+		end
+		if opts.size == nil then
+			if opts.direction == "bottom" or opts.direction == "top" then
+				-- vertical split
+				-- we want it to be smaller
+				opts.size = "30%"
+			else -- assume horizontal split
+				opts.size = "40%"
+			end
+		end
+	end
+end
+
 ---
 -- Internal helper to calculate pixel geometry for floating windows.
 --
 function Terminal:_calculate_floating_geometry(win_config)
-	local width_str = win_config.width or "80%"
-	local height_str = win_config.height or "80%"
-	local margin_str = win_config.margin or "2%"
-	local position = win_config.position or "center"
+	local width_str = win_config.width
+	local height_str = win_config.height
+	local margin_str = win_config.margin
+	local position = win_config.position
 
 	-- Calculate pixel values
 	local width = math.floor(vim.o.columns * (tonumber((width_str:gsub("%%", ""))) / 100))
@@ -73,24 +105,27 @@ function Terminal:_calculate_floating_geometry(win_config)
 	}
 end
 
-function M:new(config)
+function New(config)
 	if not config.cmd then
 		vim.notify("FloatingTerm:new() requires 'cmd'", vim.log.levels.ERROR)
 		return
 	end
 
-	local self = setmetatable({}, Terminal)
-	self.cmd = config.cmd
-	self.win_opts = config.win_opts or {} -- Legacy support
-	self.bufnr = nil
-	self.win_id = nil
-	self.job_id = nil
-	return self
+	local instance = setmetatable({}, Terminal)
+	instance.cmd = config.cmd
+	instance.win_opts = config.win_opts or {} -- Legacy support
+	instance.bufnr = nil
+	instance.win_id = nil
+	instance.job_id = nil
+	return instance
 end
 
 function Terminal:toggle(opts)
 	if opts == nil then
 		self:hide()
+	end
+	if opts and opts.win then
+		self:_apply_defaults(opts.win)
 	end
 	if self.win_id and vim.api.nvim_win_is_valid(self.win_id) then
 		if opts.win.type == "floating" then
@@ -120,6 +155,7 @@ end
 --
 function Terminal:open(opts)
 	local win_config = opts.win
+	self:_apply_defaults(win_config)
 
 	-- 2. If window is valid, just focus it
 	if self.win_id and vim.api.nvim_win_is_valid(self.win_id) then
@@ -222,53 +258,53 @@ end
 
 local terms = {}
 
---- @class TFlingResizeOptions
+--- @class termResizeOptions
 --- @field width? number|string width as number, percentage ("50%"), or relative ("+5%")
 --- @field height? number|string height as number, percentage ("50%"), or relative ("+5%")
 
---- @class TFlingRepositionOptions
+--- @class termRepositionOptions
 --- @field position? "top-left" | "top-center" | "top-right" | "bottom-left" | "bottom-right" | "bottom-center" | "left-center" | "right-center" | "center" position for floating windows
 --- @field row? number|string row position as number, percentage ("50%"), or relative ("+10")
 --- @field col? number|string column position as number, percentage ("50%"), or relative ("+10")
 --- @field direction? "top" | "bottom" | "left" | "right" direction for split windows
 
---- @class TFlingWindowOps
---- @field resize fun(options: TFlingResizeOptions) resize the terminal window
---- @field reposition fun(options: TFlingRepositionOptions) reposition the terminal window
+--- @class termWindowOps
+--- @field resize fun(options: termResizeOptions) resize the terminal window
+--- @field reposition fun(options: termRepositionOptions) reposition the terminal window
 
---- @class TFlingTermDetails
+--- @class termTermDetails
 --- @field job_id number the job ID (channel ID for nvim_chan_send)
 --- @field bufnr number the buffer number
 --- @field win_id number the window ID
 --- @field name string the terminal name
 --- @field cmd string the command being run
 --- @field send function helper function to send commands to the terminal
---- @field win TFlingWindowOps window manipulation functions
+--- @field win termWindowOps window manipulation functions
 --- @field selected_text? string the text that was selected when triggered from visual mode
 
---- @class TFlingFloatingWin
+--- @class termFloatingWin
 --- @field type "floating"
 --- @field position? "top-left" | "top-center" | "top-right" | "bottom-left" | "bottom-right" | "bottom-center" | "left-center" | "right-center" position of floating window (defaults to "center")
 --- @field width? string width as a percentage like "80%" (defaults to "80%")
 --- @field height? string height as a percentage like "80%" (defaults to "80%")
 --- @field margin? string margin as a percentage like "2%" (defaults to "2%")
 
---- @class TFlingSplitWin
+--- @class termSplitWin
 --- @field type "split"
 --- @field direction string split direction: "top", "bottom", "left", "right"
 --- @field size string size as a percentage like "30%"
 
---- @class TFlingTerm
+--- @class termTerm
 --- @field name? string the name (needs to be unique, defaults to cmd)
 --- @field cmd string the command/program to run
---- @field win? TFlingFloatingWin|TFlingSplitWin window configuration (defaults to floating center)
+--- @field win? termFloatingWin|termSplitWin window configuration (defaults to floating center)
 --- @field width? string width as a percentage like "80%" (deprecated, use win.width)
 --- @field height? string height as a percentage like "80%" (deprecated, use win.height)
 --- @field send_delay? number delay in milliseconds before sending commands (defaults to global config)
---- @field setup? fun(details: TFlingTermDetails) function to run on mount (receives TFlingTermDetails table)
+--- @field setup? fun(details: termTermDetails) function to run on mount (receives termTermDetails table)
 
---- @param opts TFlingTerm
-function TFling(opts)
+--- @param opts termTerm
+function M.term(opts)
 	if opts.setup == nil then
 		opts.setup = function() end
 	end
@@ -276,10 +312,6 @@ function TFling(opts)
 	if opts.win == nil then
 		opts.win = {
 			type = "floating",
-			height = "80%",
-			width = "80%",
-			position = "top-center",
-			margin = "10%",
 		}
 	end
 
@@ -292,11 +324,14 @@ function TFling(opts)
 	local captured_selected_text = get_selected_text()
 
 	if terms[opts.name] == nil then
-		terms[opts.name] = M:new({
+		terms[opts.name] = New({
 			cmd = opts.cmd,
 			win_opts = {}, -- Legacy support
 		})
 	end
+
+	-- Apply defaults to win configuration
+	terms[opts.name]:_apply_defaults(opts.win)
 	terms[opts.name]:toggle(opts)
 	-- call setup function in autocommand
 	local augroup_name = "tfling." .. opts.name .. ".config"
@@ -553,10 +588,10 @@ Config = {
 }
 
 --- @class SetupOpts
---- @field always? fun(TFlingTermDetails) callback ran in all tfling buffers
+--- @field always? fun(termTermDetails) callback ran in all tfling buffers
 --- @field send_delay? number delay in milliseconds before sending commands (default: 100)
 ---
-local function setup(opts)
+function M.setup(opts)
 	if opts.always ~= nil then
 		Config.always = opts.always
 	end
@@ -615,11 +650,11 @@ vim.api.nvim_create_user_command("TFlingResizeCurrent", function(opts)
 
 	-- If no arguments provided, show usage
 	if vim.tbl_isempty(resize_options) then
-		vim.notify("Usage: TFlingResizeCurrent width=<value> height=<value>", vim.log.levels.INFO)
+		vim.notify("Usage: termResizeCurrent width=<value> height=<value>", vim.log.levels.INFO)
 		vim.notify("Examples:", vim.log.levels.INFO)
-		vim.notify("  TFlingResizeCurrent width=+5%%", vim.log.levels.INFO)
-		vim.notify("  TFlingResizeCurrent height=50%%", vim.log.levels.INFO)
-		vim.notify("  TFlingResizeCurrent width=80 height=30", vim.log.levels.INFO)
+		vim.notify("  termResizeCurrent width=+5%%", vim.log.levels.INFO)
+		vim.notify("  termResizeCurrent height=50%%", vim.log.levels.INFO)
+		vim.notify("  termResizeCurrent width=80 height=30", vim.log.levels.INFO)
 		return
 	end
 
@@ -742,7 +777,7 @@ end, {
 	desc = "Resize the current terminal window",
 })
 
-vim.api.nvim_create_user_command("TFlingRepositionCurrent", function(opts)
+vim.api.nvim_create_user_command("termRepositionCurrent", function(opts)
 	local current_win = vim.api.nvim_get_current_win()
 	local current_buf = vim.api.nvim_get_current_buf()
 	local term_instance = active_instances[current_win]
@@ -803,14 +838,14 @@ vim.api.nvim_create_user_command("TFlingRepositionCurrent", function(opts)
 	-- If no arguments provided, show usage
 	if vim.tbl_isempty(reposition_options) then
 		vim.notify(
-			"Usage: TFlingRepositionCurrent [position=<pos>] [row=<value>] [col=<value>] [direction=<dir>]",
+			"Usage: termRepositionCurrent [position=<pos>] [row=<value>] [col=<value>] [direction=<dir>]",
 			vim.log.levels.INFO
 		)
 		vim.notify("Examples:", vim.log.levels.INFO)
-		vim.notify("  TFlingRepositionCurrent position=top-left", vim.log.levels.INFO)
-		vim.notify("  TFlingRepositionCurrent row=+10 col=+20", vim.log.levels.INFO)
-		vim.notify("  TFlingRepositionCurrent row=50% col=50%", vim.log.levels.INFO)
-		vim.notify("  TFlingRepositionCurrent direction=top", vim.log.levels.INFO)
+		vim.notify("  termRepositionCurrent position=top-left", vim.log.levels.INFO)
+		vim.notify("  termRepositionCurrent row=+10 col=+20", vim.log.levels.INFO)
+		vim.notify("  termRepositionCurrent row=50% col=50%", vim.log.levels.INFO)
+		vim.notify("  termRepositionCurrent direction=top", vim.log.levels.INFO)
 		return
 	end
 
@@ -944,8 +979,4 @@ end, {
 	desc = "Reposition the current terminal window",
 })
 
-return {
-	term = TFling,
-	setup = setup,
-	hide_current = M.hide_current,
-}
+return M
