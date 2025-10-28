@@ -28,7 +28,9 @@ function ApplyDefaults(tbl, defaults)
 
 	-- There may be keys in defaults which are not in tbl
 	for key, value in pairs(defaults) do
-		applied[key] = value or defaults[key]
+		if applied[key] == nil then
+			applied[key] = value
+		end
 	end
 	return applied
 end
@@ -49,6 +51,8 @@ function M.apply_win_defaults(opts)
 		else
 			opts = ApplyDefaults(opts, HorizontalSplitDefaults)
 		end
+	else
+		return ApplyDefaults(opts, FloatingDefaults)
 	end
 	return opts
 end

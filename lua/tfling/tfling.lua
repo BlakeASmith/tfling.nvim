@@ -9,6 +9,7 @@ local active_instances = {}
 local util = require("tfling.util")
 local get_selected_text = util.get_selected_text
 local defaults = require("tfling.defaults")
+local geometry = require("tfling.geometry")
 
 ---
 -- Internal helper to calculate pixel geometry for floating windows.
@@ -95,11 +96,12 @@ function Terminal:toggle(opts)
 		self:hide()
 	end
 	if opts and opts.win then
-		opts.win = defaults.apply_win_defaults(opts.win)
+		local win_config = defaults.apply_win_defaults(opts.win)
+		opts.win = win_config
 	end
 	if self.win_id and vim.api.nvim_win_is_valid(self.win_id) then
 		if opts.win.type == "floating" then
-			local final_win_opts = self:_calculate_floating_geometry(opts.win)
+			local final_win_opts = geometry.floating(opts.win)
 			vim.api.nvim_win_set_config(self.win_id, final_win_opts)
 			vim.api.nvim_set_current_win(self.win_id)
 		else
@@ -124,8 +126,7 @@ end
 -- Opens the terminal window.
 --
 function Terminal:open(opts)
-	local win_config = opts.win
-	opts.win = defaults.apply_win_defaults(opts.win)
+	local win_config = defaults.apply_win_defaults(opts.win)
 
 	-- 2. If window is valid, just focus it
 	if self.win_id and vim.api.nvim_win_is_valid(self.win_id) then
@@ -136,7 +137,7 @@ function Terminal:open(opts)
 	-- 3. If buffer exists, create window based on type
 	if self.bufnr and vim.api.nvim_buf_is_valid(self.bufnr) then
 		if win_config.type == "floating" then
-			local final_win_opts = self:_calculate_floating_geometry(win_config)
+			local final_win_opts = geometry.floating(win_config)
 			self.win_id = vim.api.nvim_open_win(self.bufnr, true, final_win_opts)
 		else
 			self:_create_split_window(win_config)
@@ -153,7 +154,7 @@ function Terminal:open(opts)
 	vim.bo[self.bufnr].filetype = "tfling"
 
 	if win_config.type == "floating" then
-		local final_win_opts = self:_calculate_floating_geometry(win_config)
+		local final_win_opts = geometry.floating(win_config)
 		self.win_id = vim.api.nvim_open_win(self.bufnr, true, final_win_opts)
 	else
 		self:_create_split_window(win_config)
@@ -315,7 +316,8 @@ function M.term(opts)
 	end
 
 	-- Apply defaults to win configuration
-	opts.win = defaults.apply_win_defaults(opts.win)
+	local win_config = defaults.apply_win_defaults(opts.win)
+	opts.win = win_config
 	terms[opts.name]:toggle(opts)
 	-- call setup function in autocommand
 	local augroup_name = "tfling." .. opts.name .. ".config"
