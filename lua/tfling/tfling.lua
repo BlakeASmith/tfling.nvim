@@ -8,39 +8,7 @@ local active_instances = {}
 
 local util = require("tfling.util")
 local get_selected_text = util.get_selected_text
-
----
--- Sets default win config
---- @param opts termSplitWin | termFloatingWin
-function Terminal:_apply_defaults(opts)
-	if opts.type == "floating" then
-		if opts.height == nil then
-			opts.height = "80%"
-		end
-		if opts.width == nil then
-			opts.width = "80%"
-		end
-		if opts.position == nil then
-			opts.position = "top-center"
-		end
-		if opts.margin == nil then
-			opts.margin = "5%"
-		end
-	elseif opts.type == "split" then
-		if opts.direction == nil then
-			opts.direction = "right"
-		end
-		if opts.size == nil then
-			if opts.direction == "bottom" or opts.direction == "top" then
-				-- vertical split
-				-- we want it to be smaller
-				opts.size = "30%"
-			else -- assume horizontal split
-				opts.size = "40%"
-			end
-		end
-	end
-end
+local defaults = require("tfling.defaults")
 
 ---
 -- Internal helper to calculate pixel geometry for floating windows.
@@ -127,7 +95,7 @@ function Terminal:toggle(opts)
 		self:hide()
 	end
 	if opts and opts.win then
-		self:_apply_defaults(opts.win)
+		opts.win = defaults.apply_win_defaults(opts.win)
 	end
 	if self.win_id and vim.api.nvim_win_is_valid(self.win_id) then
 		if opts.win.type == "floating" then
@@ -157,7 +125,7 @@ end
 --
 function Terminal:open(opts)
 	local win_config = opts.win
-	self:_apply_defaults(win_config)
+	opts.win = defaults.apply_win_defaults(opts.win)
 
 	-- 2. If window is valid, just focus it
 	if self.win_id and vim.api.nvim_win_is_valid(self.win_id) then
@@ -347,7 +315,7 @@ function M.term(opts)
 	end
 
 	-- Apply defaults to win configuration
-	terms[opts.name]:_apply_defaults(opts.win)
+	opts.win = defaults.apply_win_defaults(opts.win)
 	terms[opts.name]:toggle(opts)
 	-- call setup function in autocommand
 	local augroup_name = "tfling." .. opts.name .. ".config"

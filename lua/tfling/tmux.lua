@@ -28,16 +28,15 @@ function M.kill_session(opts)
 	if opts.tmux_cmd ~= nil then
 		cmd = opts.tmux_cmd
 	end
-	local result = vim.system(cmd):wait()
-	return result
+	return cmd
 end
 
 --- Check if a tmux session exists
 --- @param session_name string
 --- @return boolean
 function M.session_exists(session_name)
-  local result = vim.system({ "tmux", "has-session", "-t", session_name }):wait()
-  return result.code == 0
+	local result = vim.system({ "tmux", "has-session", "-t", session_name }):wait()
+	return result.code == 0
 end
 
 --- @class AttachSessionOpts
