@@ -299,6 +299,7 @@ local terms = {}
 --- @class termTerm
 --- @field name? string the name (needs to be unique, defaults to cmd)
 --- @field cmd string the command/program to run
+--- @field tmux? boolean whether to use tmux for this terminal (defaults to false)
 --- @field win? termFloatingWin|termSplitWin window configuration (defaults to floating center)
 --- @field width? string width as a percentage like "80%" (deprecated, use win.width)
 --- @field height? string height as a percentage like "80%" (deprecated, use win.height)
@@ -322,12 +323,25 @@ function M.term(opts)
 		opts.name = opts.cmd
 	end
 
+	-- Handle tmux-backed terminals
+	local actual_cmd = opts.cmd
+	if opts.tmux then
+		local tmux = require("tfling.tmux")
+		local session_name = "tfling-" .. (opts.name or opts.cmd)
+		-- Create the tmux session
+		local start_session_command = tmux.session({
+			name = session_name,
+			start_cmd = vim.split(opts.cmd, " "),
+		})
+		actual_cmd = table.concat(start_session_command, " ")
+	end
+
 	-- Capture selected text BEFORE any buffer operations
 	local captured_selected_text = get_selected_text()
 
 	if terms[opts.name] == nil then
 		terms[opts.name] = New({
-			cmd = opts.cmd,
+			cmd = actual_cmd,
 			win_opts = {}, -- Legacy support
 		})
 	end
@@ -353,7 +367,7 @@ function M.term(opts)
 				bufnr = terms[opts.name].bufnr,
 				win_id = terms[opts.name].win_id,
 				name = opts.name,
-				cmd = opts.cmd,
+				cmd = actual_cmd,
 				selected_text = captured_selected_text, -- Use the captured text
 				-- Helper function to send commands to this terminal
 				send = function(command)
