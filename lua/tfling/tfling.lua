@@ -269,6 +269,7 @@ local terms = {}
 --- @field name? string the name (needs to be unique, defaults to cmd)
 --- @field cmd string the command/program to run
 --- @field tmux? boolean whether to use tmux for this terminal (defaults to false)
+--- @field abduco? boolean whether to use abduco for this terminal (defaults to false)
 --- @field win? termFloatingWin|termSplitWin window configuration (defaults to floating center)
 --- @field width? string width as a percentage like "80%" (deprecated, use win.width)
 --- @field height? string height as a percentage like "80%" (deprecated, use win.height)
@@ -294,15 +295,19 @@ function M.term(opts)
 
 	-- Handle tmux-backed terminals
 	local actual_cmd = opts.cmd
+	local cmd_table = vim.split(opts.cmd, " ")
+	local session_name = "tfling-" .. (opts.name or opts.cmd)
+	local sessions = require("tfling.sessions")
+
+	local provider = nil
 	if opts.tmux then
-		local tmux = require("tfling.tmux")
-		local session_name = "tfling-" .. (opts.name or opts.cmd)
-		-- Create the tmux session
-		local start_session_command = tmux.session({
-			name = session_name,
-			start_cmd = vim.split(opts.cmd, " "),
-		})
-		actual_cmd = table.concat(start_session_command, " ")
+		provider = sessions.tmux
+	end
+	if opts.abduco then
+		provider = sessions.abduco
+	end
+	if provider ~= nil then
+		actual_cmd = table.concat(provider.create_or_attach_cmd({ session_id = session_name, cmd = cmd_table }), " ")
 	end
 
 	-- Capture selected text BEFORE any buffer operations
