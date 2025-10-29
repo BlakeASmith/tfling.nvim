@@ -50,4 +50,27 @@ function M:get_selected_text()
 	return table.concat(result, "\n")
 end
 
+--- Get the path to the tfling tmux config file
+--- @return string
+function M.get_tmux_config_path()
+	-- Get the directory of the current script (this util.lua file)
+	local script_path = debug.getinfo(1, "S").source:sub(2) -- Remove the @ prefix
+	local script_dir = vim.fn.fnamemodify(script_path, ":h")
+	
+	-- Navigate up from lua/tfling/util.lua to the plugin root
+	-- script_dir is lua/tfling/, so go up two levels to get plugin root
+	local plugin_root = vim.fn.fnamemodify(script_dir, ":h:h")
+	local config_path = plugin_root .. "/resources/tfling.tmux.conf"
+	
+	-- Verify the config file exists
+	if vim.fn.filereadable(config_path) == 0 then
+		vim.notify(
+			"tfling.nvim: tmux config file not found at " .. config_path,
+			vim.log.levels.ERROR
+		)
+	end
+	
+	return config_path
+end
+
 return M
