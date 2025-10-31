@@ -88,8 +88,7 @@ function Terminal:toggle(opts)
 	if self.win_id and vim.api.nvim_win_is_valid(self.win_id) then
 		if opts.win and not is_split_position(opts.win.position) then
 			-- Floating window - update geometry
-			local final_win_opts = geometry.floating(opts.win)
-			vim.api.nvim_win_set_config(self.win_id, final_win_opts)
+			vim.api.nvim_win_set_config(self.win_id, geometry.floating(opts.win))
 			vim.api.nvim_set_current_win(self.win_id)
 		else
 			-- For splits, just focus the existing window
@@ -126,8 +125,7 @@ function Terminal:open(opts)
 		if is_split_position(win_config.position) then
 			self:_create_split_window(win_config)
 		else
-			local final_win_opts = geometry.floating(win_config)
-			self.win_id = vim.api.nvim_open_win(self.bufnr, true, final_win_opts)
+			self.win_id = vim.api.nvim_open_win(self.bufnr, true, geometry.floating(win_config))
 		end
 		active_instances[self.win_id] = self
 		self:setup_win_options()
@@ -143,8 +141,7 @@ function Terminal:open(opts)
 	if is_split_position(win_config.position) then
 		self:_create_split_window(win_config)
 	else
-		local final_win_opts = geometry.floating(win_config)
-		self.win_id = vim.api.nvim_open_win(self.bufnr, true, final_win_opts)
+		self.win_id = vim.api.nvim_open_win(self.bufnr, true, geometry.floating(win_config))
 	end
 	active_instances[self.win_id] = self
 	self:setup_win_options()
@@ -167,22 +164,19 @@ end
 --- Create a split window for the terminal
 --- @param win_config table window configuration with position, width, and height fields
 function Terminal:_create_split_window(win_config)
-	local position = win_config.position
-	local direction = get_split_direction(position)
+	local direction = get_split_direction(win_config.position)
 	
 	if not direction then
-		vim.notify("tfling: invalid split position: " .. (position or "nil"), vim.log.levels.ERROR)
+		vim.notify("tfling: invalid split position: " .. (win_config.position or "nil"), vim.log.levels.ERROR)
 		return
 	end
 
-	local size_str, actual_size
 	local is_horizontal = direction == "top" or direction == "bottom"
 
 	if is_horizontal then
 		-- Horizontal split - use height
-		size_str = win_config.height or "40%"
-		local size_percent = tonumber((size_str:gsub("%%", "")))
-		actual_size = math.floor(vim.o.lines * (size_percent / 100))
+		local size_percent = tonumber(((win_config.height or "40%"):gsub("%%", "")))
+		local actual_size = math.floor(vim.o.lines * (size_percent / 100))
 		if direction == "top" then
 			vim.cmd("topleft split")
 		else
@@ -191,9 +185,8 @@ function Terminal:_create_split_window(win_config)
 		vim.cmd("resize " .. actual_size)
 	else
 		-- Vertical split - use width
-		size_str = win_config.width or "30%"
-		local size_percent = tonumber((size_str:gsub("%%", "")))
-		actual_size = math.floor(vim.o.columns * (size_percent / 100))
+		local size_percent = tonumber(((win_config.width or "30%"):gsub("%%", "")))
+		local actual_size = math.floor(vim.o.columns * (size_percent / 100))
 		if direction == "left" then
 			vim.cmd("topleft vsplit")
 		else
@@ -211,20 +204,17 @@ end
 
 --- Setup window options for the terminal window
 function Terminal:setup_win_options()
-	local win_id = self.win_id
-	local current_config = vim.api.nvim_win_get_config(win_id)
-	if current_config.relative == "editor" then
-		vim.wo[win_id].winhighlight = "Normal:NormalFloat,FloatBorder:FloatBorder"
+	if vim.api.nvim_win_get_config(self.win_id).relative == "editor" then
+		vim.wo[self.win_id].winhighlight = "Normal:NormalFloat,FloatBorder:FloatBorder"
 	end
-	vim.wo[win_id].relativenumber = false
-	vim.wo[win_id].number = false
-	vim.wo[win_id].signcolumn = "no"
+	vim.wo[self.win_id].relativenumber = false
+	vim.wo[self.win_id].number = false
+	vim.wo[self.win_id].signcolumn = "no"
 end
 
 --- Hide the current terminal window
 function M.hide_current()
-	local current_win = vim.api.nvim_get_current_win()
-	local term_instance = active_instances[current_win]
+	local term_instance = active_instances[vim.api.nvim_get_current_win()]
 	if term_instance then
 		term_instance:hide()
 	end
@@ -288,19 +278,16 @@ function M.term(opts)
 
 	-- Handle tmux-backed terminals
 	local actual_cmd = opts.cmd
-	local cmd_table = vim.split(opts.cmd, " ")
-	local session_name = "tfling-" .. (opts.name or opts.cmd)
-	local sessions = require("tfling.sessions")
-
-	local provider = nil
 	if opts.tmux then
-		provider = sessions.tmux
-	end
-	if opts.abduco then
-		provider = sessions.abduco
-	end
-	if provider ~= nil then
-		actual_cmd = table.concat(provider.create_or_attach_cmd({ session_id = session_name, cmd = cmd_table }), " ")
+		actual_cmd = table.concat(require("tfling.sessions").tmux.create_or_attach_cmd({
+			session_id = "tfling-" .. (opts.name or opts.cmd),
+			cmd = vim.split(opts.cmd, " "),
+		}), " ")
+	elseif opts.abduco then
+		actual_cmd = table.concat(require("tfling.sessions").abduco.create_or_attach_cmd({
+			session_id = "tfling-" .. (opts.name or opts.cmd),
+			cmd = vim.split(opts.cmd, " "),
+		}), " ")
 	end
 
 	-- Capture selected text BEFORE any buffer operations
@@ -320,19 +307,17 @@ function M.term(opts)
 	end
 
 	-- Apply defaults to win configuration
-	local win_config = defaults.apply_win_defaults(opts.win)
-	opts.win = win_config
+	opts.win = defaults.apply_win_defaults(opts.win)
 	term_instance:toggle(opts)
 
 	-- Call setup function in autocommand
-	local augroup_name = "tfling." .. opts.name .. ".config"
-	vim.api.nvim_create_augroup(augroup_name, {
+	vim.api.nvim_create_augroup("tfling." .. opts.name .. ".config", {
 		-- reset each time we enter
 		clear = true,
 	})
 	-- on terminal enter (the window opening)
 	vim.api.nvim_create_autocmd("TermEnter", {
-		group = augroup_name,
+		group = "tfling." .. opts.name .. ".config",
 		-- only apply in the buffer created for this program
 		buffer = term_instance.bufnr,
 		callback = function()
@@ -348,10 +333,9 @@ function M.term(opts)
 				send = function(command)
 					if term_instance and term_instance.job_id then
 						-- Use per-terminal send_delay if provided, otherwise fall back to global config
-						local delay = opts.send_delay or Config.send_delay or DEFAULT_SEND_DELAY
 						vim.defer_fn(function()
 							vim.api.nvim_chan_send(term_instance.job_id, command)
-						end, delay)
+						end, opts.send_delay or Config.send_delay or DEFAULT_SEND_DELAY)
 					end
 				end,
 				-- Helper function to resize the terminal window

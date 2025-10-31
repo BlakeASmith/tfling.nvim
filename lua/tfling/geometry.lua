@@ -23,15 +23,10 @@ local MIN_WINDOW_PADDING = 2
 --- @param win_config table window configuration with width, height, margin, and position
 --- @return table nvim_open_win configuration table
 function M.floating(win_config)
-	local width_str = win_config.width
-	local height_str = win_config.height
-	local margin_str = win_config.margin
-	local position = win_config.position
-
 	-- Calculate pixel values
-	local width = math.floor(vim.o.columns * (tonumber((width_str:gsub("%%", ""))) / 100))
-	local height = math.floor(vim.o.lines * (tonumber((height_str:gsub("%%", ""))) / 100))
-	local margin = math.floor(math.min(vim.o.lines, vim.o.columns) * (tonumber((margin_str:gsub("%%", ""))) / 100))
+	local width = math.floor(vim.o.columns * (tonumber((win_config.width:gsub("%%", ""))) / 100))
+	local height = math.floor(vim.o.lines * (tonumber((win_config.height:gsub("%%", ""))) / 100))
+	local margin = math.floor(math.min(vim.o.lines, vim.o.columns) * (tonumber((win_config.margin:gsub("%%", ""))) / 100))
 
 	-- Ensure it's not larger than the screen
 	width = math.min(width, vim.o.columns - MIN_WINDOW_PADDING)
@@ -39,6 +34,7 @@ function M.floating(win_config)
 
 	-- Calculate position based on placement
 	local row, col
+	local position = win_config.position
 	if position == POSITION.CENTER then
 		row = math.floor((vim.o.lines - height) / 2)
 		col = math.floor((vim.o.columns - width) / 2)

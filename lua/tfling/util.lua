@@ -5,8 +5,7 @@ local M = {}
 --- @return string|nil selected text or nil if not in visual mode
 function M.get_selected_text()
 	-- Check if we're currently in visual mode using nvim_get_mode()
-	local mode_info = vim.api.nvim_get_mode()
-	local current_mode = mode_info.mode
+	local current_mode = vim.api.nvim_get_mode().mode
 
 	-- Check if we're in any visual mode (v, V, or Ctrl+V)
 	if not string.match(current_mode, "^[vV]") and current_mode ~= "\22" then
@@ -32,18 +31,15 @@ function M.get_selected_text()
 	-- Extract the selection based on positions
 	local result = {}
 	for i, line in ipairs(lines) do
-		local start_col = start_pos[3]
-		local end_col = end_pos[3]
-
 		if i == 1 and i == #lines then
 			-- Single line selection
-			table.insert(result, string.sub(line, start_col, end_col))
+			table.insert(result, string.sub(line, start_pos[3], end_pos[3]))
 		elseif i == 1 then
 			-- First line of multi-line selection
-			table.insert(result, string.sub(line, start_col))
+			table.insert(result, string.sub(line, start_pos[3]))
 		elseif i == #lines then
 			-- Last line of multi-line selection
-			table.insert(result, string.sub(line, 1, end_col))
+			table.insert(result, string.sub(line, 1, end_pos[3]))
 		else
 			-- Middle lines
 			table.insert(result, line)
@@ -62,8 +58,7 @@ function M.get_tmux_config_path()
 	
 	-- Navigate up from lua/tfling/util.lua to the plugin root
 	-- script_dir is lua/tfling/, so go up two levels to get plugin root
-	local plugin_root = vim.fn.fnamemodify(script_dir, ":h:h")
-	local config_path = plugin_root .. "/resources/tfling.tmux.conf"
+	local config_path = vim.fn.fnamemodify(script_dir, ":h:h") .. "/resources/tfling.tmux.conf"
 	
 	-- Verify the config file exists
 	if vim.fn.filereadable(config_path) == 0 then

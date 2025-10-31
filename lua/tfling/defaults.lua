@@ -65,20 +65,17 @@ local function expand_size(opts)
 		opts.height = nil
 	end
 
-	local position = opts.position or "center"
-	local size = opts.size
-
-	if is_split_position(position) then
+	if is_split_position(opts.position or "center") then
 		-- For splits: size becomes width for vertical splits, height for horizontal splits
-		if is_horizontal_split(position) then
-			opts.height = size
+		if is_horizontal_split(opts.position) then
+			opts.height = opts.size
 		else
-			opts.width = size
+			opts.width = opts.size
 		end
 	else
 		-- For floating: size becomes both width and height
-		opts.width = size
-		opts.height = size
+		opts.width = opts.size
+		opts.height = opts.size
 	end
 
 	-- Remove size field after expansion
@@ -90,19 +87,14 @@ end
 --- @param opts table window configuration with position field
 --- @return table window configuration with defaults applied
 function M.apply_win_defaults(opts)
-	local position = opts.position or "center"
-	
 	-- Expand size field first if present
 	opts = expand_size(opts)
 	
+	local position = opts.position or "center"
+	
 	if is_split_position(position) then
 		-- For splits, apply split defaults
-		local defaults = {}
-		if is_horizontal_split(position) then
-			defaults.height = SplitDefaults.height
-		else
-			defaults.width = SplitDefaults.width
-		end
+		local defaults = is_horizontal_split(position) and { height = SplitDefaults.height } or { width = SplitDefaults.width }
 		opts.position = position
 		return ApplyDefaults(opts, defaults)
 	else

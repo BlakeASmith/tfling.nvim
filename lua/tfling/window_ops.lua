@@ -32,12 +32,10 @@ local function parse_size(size_str, base, current)
 	if type(size_str) == "string" then
 		if size_str:match("^%+%d+%%$") then
 			-- Relative increase: "+5%"
-			local percent = tonumber(size_str:match("%d+"))
-			return current and (current + math.floor(current * percent / 100)) or base
+			return current and (current + math.floor(current * tonumber(size_str:match("%d+")) / 100)) or base
 		elseif size_str:match("^%d+%%$") then
 			-- Absolute percentage: "50%"
-			local percent = tonumber(size_str:match("%d+"))
-			return math.floor(base * percent / 100)
+			return math.floor(base * tonumber(size_str:match("%d+")) / 100)
 		else
 			-- Absolute value
 			return tonumber(size_str)
@@ -56,12 +54,10 @@ local function parse_position(pos_str, base, current)
 	if type(pos_str) == "string" then
 		if pos_str:match("^%+%d+$") then
 			-- Relative increase: "+10"
-			local offset = tonumber(pos_str:match("%d+"))
-			return current and (current + offset) or base
+			return current and (current + tonumber(pos_str:match("%d+"))) or base
 		elseif pos_str:match("^%d+%%$") then
 			-- Absolute percentage: "50%"
-			local percent = tonumber(pos_str:match("%d+"))
-			return math.floor(base * percent / 100)
+			return math.floor(base * tonumber(pos_str:match("%d+")) / 100)
 		else
 			-- Absolute value
 			return tonumber(pos_str)
@@ -98,13 +94,11 @@ end
 --- @param options table with width and/or height
 local function resize_split(win_id, options)
 	if options.height then
-		local new_height = parse_size(options.height, vim.o.lines, vim.api.nvim_win_get_height(win_id))
-		vim.api.nvim_win_set_height(win_id, new_height)
+		vim.api.nvim_win_set_height(win_id, parse_size(options.height, vim.o.lines, vim.api.nvim_win_get_height(win_id)))
 	end
 
 	if options.width then
-		local new_width = parse_size(options.width, vim.o.columns, vim.api.nvim_win_get_width(win_id))
-		vim.api.nvim_win_set_width(win_id, new_width)
+		vim.api.nvim_win_set_width(win_id, parse_size(options.width, vim.o.columns, vim.api.nvim_win_get_width(win_id)))
 	end
 end
 
@@ -112,9 +106,7 @@ end
 --- @param win_id number
 --- @param options table with width and/or height
 function M.resize(win_id, options)
-	local current_config = vim.api.nvim_win_get_config(win_id)
-
-	if current_config.relative == WINDOW_RELATIVE then
+	if vim.api.nvim_win_get_config(win_id).relative == WINDOW_RELATIVE then
 		resize_floating(win_id, options)
 	else
 		resize_split(win_id, options)
@@ -131,13 +123,12 @@ local function reposition_floating(win_id, options, term_instance)
 
 	-- Handle position-based repositioning
 	if options.position and term_instance then
-		local win_config = {
+		local final_win_opts = geometry.floating({
 			position = options.position,
 			width = tostring(math.floor(current_config.width * 100 / vim.o.columns)) .. "%",
 			height = tostring(math.floor(current_config.height * 100 / vim.o.lines)) .. "%",
 			margin = "2%",
-		}
-		local final_win_opts = geometry.floating(win_config)
+		})
 		new_config.row = final_win_opts.row
 		new_config.col = final_win_opts.col
 	end
@@ -166,8 +157,6 @@ end
 local function reposition_split(win_id, options, term_instance)
 	if options.position and is_split_position(options.position) then
 		-- For split windows, we need to recreate the window in the new direction
-		local current_height = vim.api.nvim_win_get_height(win_id)
-		local current_width = vim.api.nvim_win_get_width(win_id)
 		local direction = get_split_direction(options.position)
 		local is_horizontal = direction == "top" or direction == "bottom"
 		
@@ -176,9 +165,9 @@ local function reposition_split(win_id, options, term_instance)
 		}
 		
 		if is_horizontal then
-			win_config.height = tostring(math.floor(current_height * 100 / vim.o.lines)) .. "%"
+			win_config.height = tostring(math.floor(vim.api.nvim_win_get_height(win_id) * 100 / vim.o.lines)) .. "%"
 		else
-			win_config.width = tostring(math.floor(current_width * 100 / vim.o.columns)) .. "%"
+			win_config.width = tostring(math.floor(vim.api.nvim_win_get_width(win_id) * 100 / vim.o.columns)) .. "%"
 		end
 
 		-- Close current window
@@ -196,9 +185,7 @@ end
 --- @param options table with position, row, and/or col
 --- @param term_instance table terminal instance
 function M.reposition(win_id, options, term_instance)
-	local current_config = vim.api.nvim_win_get_config(win_id)
-
-	if current_config.relative == WINDOW_RELATIVE then
+	if vim.api.nvim_win_get_config(win_id).relative == WINDOW_RELATIVE then
 		reposition_floating(win_id, options, term_instance)
 	else
 		reposition_split(win_id, options, term_instance)

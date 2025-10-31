@@ -7,11 +7,10 @@ local window_ops = require("tfling.window_ops")
 --- @param terms table
 --- @return table|nil terminal instance
 local function find_term_instance(active_instances, terms)
-	local current_win = vim.api.nvim_get_current_win()
-	local current_buf = vim.api.nvim_get_current_buf()
-	local term_instance = active_instances[current_win]
+	local term_instance = active_instances[vim.api.nvim_get_current_win()]
 
 	-- If not found by window, try to find by checking all active instances for matching buffer
+	local current_buf = vim.api.nvim_get_current_buf()
 	if not term_instance then
 		for win_id, instance in pairs(active_instances) do
 			if instance.bufnr == current_buf then
@@ -50,14 +49,10 @@ function M.create_resize_command(active_instances, terms)
 
 		-- Parse resize options from command arguments
 		local resize_options = {}
-
-		-- Parse width argument
 		local width_match = opts.args:match("width=([^%s]+)")
 		if width_match then
 			resize_options.width = width_match
 		end
-
-		-- Parse height argument
 		local height_match = opts.args:match("height=([^%s]+)")
 		if height_match then
 			resize_options.height = height_match
@@ -92,20 +87,14 @@ function M.create_reposition_command(active_instances, terms)
 
 		-- Parse reposition options from command arguments
 		local reposition_options = {}
-
-		-- Parse position argument
 		local position_match = opts.args:match("position=([^%s]+)")
 		if position_match then
 			reposition_options.position = position_match
 		end
-
-		-- Parse row argument
 		local row_match = opts.args:match("row=([^%s]+)")
 		if row_match then
 			reposition_options.row = row_match
 		end
-
-		-- Parse col argument
 		local col_match = opts.args:match("col=([^%s]+)")
 		if col_match then
 			reposition_options.col = col_match
