@@ -1,5 +1,3 @@
--- File: lua/floating_term.lua
-
 local M = {}
 
 local Terminal = {}
@@ -149,7 +147,8 @@ end
 
 function Terminal:setup_win_options()
 	local win_id = self.win_id
-	if self.win_config and self.win_config.type == "floating" then
+	local current_config = vim.api.nvim_win_get_config(win_id)
+	if current_config.relative == "editor" then
 		vim.wo[win_id].winhighlight = "Normal:NormalFloat,FloatBorder:FloatBorder"
 	end
 	vim.wo[win_id].relativenumber = false
@@ -166,6 +165,15 @@ function M.hide_current()
 end
 
 local terms = {}
+
+-- Constants
+local DEFAULT_SEND_DELAY = 100 -- milliseconds
+
+-- Configuration
+local Config = {
+	always = function(term) end,
+	send_delay = DEFAULT_SEND_DELAY,
+}
 
 --- @class termResizeOptions
 --- @field width? number|string width as number, percentage ("50%"), or relative ("+5%")
@@ -251,18 +259,22 @@ function M.term(opts)
 	-- Capture selected text BEFORE any buffer operations
 	local captured_selected_text = get_selected_text()
 
-	if terms[opts.name] == nil then
-		terms[opts.name] = New({
+	-- Get or create terminal instance
+	local term_instance = terms[opts.name]
+	if not term_instance then
+		term_instance = New({
 			cmd = actual_cmd,
 			win_opts = {}, -- Legacy support
 		})
+		terms[opts.name] = term_instance
 	end
 
 	-- Apply defaults to win configuration
 	local win_config = defaults.apply_win_defaults(opts.win)
 	opts.win = win_config
-	terms[opts.name]:toggle(opts)
-	-- call setup function in autocommand
+	term_instance:toggle(opts)
+
+	-- Call setup function in autocommand
 	local augroup_name = "tfling." .. opts.name .. ".config"
 	vim.api.nvim_create_augroup(augroup_name, {
 		-- reset each time we enter
@@ -272,22 +284,21 @@ function M.term(opts)
 	vim.api.nvim_create_autocmd("TermEnter", {
 		group = augroup_name,
 		-- only apply in the buffer created for this program
-		buffer = terms[opts.name].bufnr,
+		buffer = term_instance.bufnr,
 		callback = function()
 			-- Create a table with terminal details to pass to the callback
 			local term_details = {
-				job_id = terms[opts.name].job_id,
-				bufnr = terms[opts.name].bufnr,
-				win_id = terms[opts.name].win_id,
+				job_id = term_instance.job_id,
+				bufnr = term_instance.bufnr,
+				win_id = term_instance.win_id,
 				name = opts.name,
 				cmd = actual_cmd,
 				selected_text = captured_selected_text, -- Use the captured text
 				-- Helper function to send commands to this terminal
 				send = function(command)
-					local term_instance = terms[opts.name]
 					if term_instance and term_instance.job_id then
 						-- Use per-terminal send_delay if provided, otherwise fall back to global config
-						local delay = opts.send_delay or Config.send_delay or 100
+						local delay = opts.send_delay or Config.send_delay or DEFAULT_SEND_DELAY
 						vim.defer_fn(function()
 							vim.api.nvim_chan_send(term_instance.job_id, command)
 						end, delay)
@@ -296,14 +307,12 @@ function M.term(opts)
 				-- Helper function to resize the terminal window
 				win = {
 					resize = function(options)
-						local term_instance = terms[opts.name]
 						if not term_instance or not term_instance.win_id then
 							return
 						end
 						window_ops.resize(term_instance.win_id, options)
 					end,
 					reposition = function(options)
-						local term_instance = terms[opts.name]
 						if not term_instance or not term_instance.win_id then
 							return
 						end
@@ -316,11 +325,6 @@ function M.term(opts)
 		end,
 	})
 end
-
-local Config = {
-	always = function(term) end,
-	send_delay = 100, -- Default delay in milliseconds
-}
 
 --- @class SetupOpts
 --- @field always? fun(termTermDetails) callback ran in all tfling buffers

@@ -1,6 +1,6 @@
 local M = {}
 
-function M:get_selected_text()
+function M.get_selected_text()
 	-- Check if we're currently in visual mode using nvim_get_mode()
 	local mode_info = vim.api.nvim_get_mode()
 	local current_mode = mode_info.mode
