@@ -373,52 +373,17 @@ function M.setup(opts)
 	end
 end
 
-vim.api.nvim_create_user_command("TFlingHideCurrent", M.hide_current, {})
+vim.api.nvim_create_user_command("TFlingHideCurrent", M.hide_current, {
+	desc = "Hide the current terminal window",
+})
 
 vim.api.nvim_create_user_command("TFlingResizeCurrent", commands.create_resize_command(active_instances, terms), {
-	nargs = "?",
-	complete = function()
-		return {
-			"width=+5%",
-			"width=+10%",
-			"width=50%",
-			"width=80%",
-			"height=+5%",
-			"height=+10%",
-			"height=50%",
-			"height=80%",
-		}
-	end,
+	nargs = "*",
 	desc = "Resize the current terminal window",
 })
 
 vim.api.nvim_create_user_command("TermRepositionCurrent", commands.create_reposition_command(active_instances, terms), {
-	nargs = "?",
-	complete = function()
-		return {
-			"position=center",
-			"position=top-left",
-			"position=top-center",
-			"position=top-right",
-			"position=bottom-left",
-			"position=bottom-center",
-			"position=bottom-right",
-			"position=left-center",
-			"position=right-center",
-			"position=split-top",
-			"position=split-bottom",
-			"position=split-left",
-			"position=split-right",
-			"row=+10",
-			"row=+20",
-			"row=50%",
-			"row=25%",
-			"col=+10",
-			"col=+20",
-			"col=50%",
-			"col=25%",
-		}
-	end,
+	nargs = "*",
 	desc = "Reposition the current terminal window",
 })
 
