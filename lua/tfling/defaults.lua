@@ -1,6 +1,6 @@
 local M = {}
 
-FloatingDefaults = {
+local FloatingDefaults = {
 	type = "floating",
 	height = "80%",
 	width = "80%",
@@ -8,19 +8,19 @@ FloatingDefaults = {
 	margin = "5%",
 }
 
-VerticalSplitDefaults = {
+local VerticalSplitDefaults = {
 	type = "split",
 	size = "30%",
 	direction = "right",
 }
 
-HorizontalSplitDefaults = {
+local HorizontalSplitDefaults = {
 	type = "split",
 	size = "40%",
 	direction = "bottom",
 }
 
-function ApplyDefaults(tbl, defaults)
+local function ApplyDefaults(tbl, defaults)
 	local applied = {}
 	for key, value in pairs(tbl) do
 		applied[key] = value or defaults[key]
