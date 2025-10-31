@@ -1,18 +1,35 @@
 local M = {}
 
--- Window type constants
+-- Window type constants (for internal use)
 local WINDOW_TYPE = {
 	FLOATING = "floating",
 	SPLIT = "split",
 }
 
--- Split direction constants
-local SPLIT_DIRECTION = {
-	TOP = "top",
-	BOTTOM = "bottom",
-	LEFT = "left",
-	RIGHT = "right",
+-- Split position constants
+local SPLIT_POSITION = {
+	TOP = "split-top",
+	BOTTOM = "split-bottom",
+	LEFT = "split-left",
+	RIGHT = "split-right",
 }
+
+--- Check if position indicates a split window
+--- @param position string position value
+--- @return boolean true if position is a split
+local function is_split_position(position)
+	return position and position:match("^split%-") ~= nil
+end
+
+--- Extract split direction from position
+--- @param position string position like "split-bottom"
+--- @return string direction like "bottom"
+local function get_split_direction(position)
+	if not is_split_position(position) then
+		return nil
+	end
+	return position:gsub("^split%-", "")
+end
 
 -- Terminal instance management
 local Terminal = {}
@@ -69,7 +86,8 @@ function Terminal:toggle(opts)
 	end
 
 	if self.win_id and vim.api.nvim_win_is_valid(self.win_id) then
-		if opts.win and opts.win.type == WINDOW_TYPE.FLOATING then
+		if opts.win and not is_split_position(opts.win.position) then
+			-- Floating window - update geometry
 			local final_win_opts = geometry.floating(opts.win)
 			vim.api.nvim_win_set_config(self.win_id, final_win_opts)
 			vim.api.nvim_set_current_win(self.win_id)
@@ -103,13 +121,13 @@ function Terminal:open(opts)
 		return
 	end
 
-	-- If buffer exists, create window based on type
+	-- If buffer exists, create window based on position
 	if self.bufnr and vim.api.nvim_buf_is_valid(self.bufnr) then
-		if win_config.type == WINDOW_TYPE.FLOATING then
+		if is_split_position(win_config.position) then
+			self:_create_split_window(win_config)
+		else
 			local final_win_opts = geometry.floating(win_config)
 			self.win_id = vim.api.nvim_open_win(self.bufnr, true, final_win_opts)
-		else
-			self:_create_split_window(win_config)
 		end
 		active_instances[self.win_id] = self
 		self:setup_win_options()
@@ -122,11 +140,11 @@ function Terminal:open(opts)
 	vim.bo[self.bufnr].bufhidden = "hide"
 	vim.bo[self.bufnr].filetype = "tfling"
 
-	if win_config.type == WINDOW_TYPE.FLOATING then
+	if is_split_position(win_config.position) then
+		self:_create_split_window(win_config)
+	else
 		local final_win_opts = geometry.floating(win_config)
 		self.win_id = vim.api.nvim_open_win(self.bufnr, true, final_win_opts)
-	else
-		self:_create_split_window(win_config)
 	end
 	active_instances[self.win_id] = self
 	self:setup_win_options()
@@ -147,25 +165,36 @@ function Terminal:open(opts)
 end
 
 --- Create a split window for the terminal
---- @param win_config table window configuration with size and direction fields
+--- @param win_config table window configuration with position, width, and height fields
 function Terminal:_create_split_window(win_config)
-	local size_str = win_config.size
-	local size_percent = tonumber((size_str:gsub("%%", "")))
-	local actual_size
+	local position = win_config.position
+	local direction = get_split_direction(position)
+	
+	if not direction then
+		vim.notify("tfling: invalid split position: " .. (position or "nil"), vim.log.levels.ERROR)
+		return
+	end
 
-	if win_config.direction == SPLIT_DIRECTION.TOP or win_config.direction == SPLIT_DIRECTION.BOTTOM then
-		-- Horizontal split - calculate percentage of total lines
+	local size_str, actual_size
+	local is_horizontal = direction == "top" or direction == "bottom"
+
+	if is_horizontal then
+		-- Horizontal split - use height
+		size_str = win_config.height or "40%"
+		local size_percent = tonumber((size_str:gsub("%%", "")))
 		actual_size = math.floor(vim.o.lines * (size_percent / 100))
-		if win_config.direction == SPLIT_DIRECTION.TOP then
+		if direction == "top" then
 			vim.cmd("topleft split")
 		else
 			vim.cmd("botright split")
 		end
 		vim.cmd("resize " .. actual_size)
-	elseif win_config.direction == SPLIT_DIRECTION.LEFT or win_config.direction == SPLIT_DIRECTION.RIGHT then
-		-- Vertical split - calculate percentage of total columns
+	else
+		-- Vertical split - use width
+		size_str = win_config.width or "30%"
+		local size_percent = tonumber((size_str:gsub("%%", "")))
 		actual_size = math.floor(vim.o.columns * (size_percent / 100))
-		if win_config.direction == SPLIT_DIRECTION.LEFT then
+		if direction == "left" then
 			vim.cmd("topleft vsplit")
 		else
 			vim.cmd("botright vsplit")
@@ -206,10 +235,9 @@ end
 --- @field height? number|string height as number, percentage ("50%"), or relative ("+5%")
 
 --- @class termRepositionOptions
---- @field position? "top-left" | "top-center" | "top-right" | "bottom-left" | "bottom-right" | "bottom-center" | "left-center" | "right-center" | "center" position for floating windows
+--- @field position? "center" | "top-left" | "top-center" | "top-right" | "bottom-left" | "bottom-right" | "bottom-center" | "left-center" | "right-center" | "split-top" | "split-bottom" | "split-left" | "split-right" position for repositioning
 --- @field row? number|string row position as number, percentage ("50%"), or relative ("+10")
 --- @field col? number|string column position as number, percentage ("50%"), or relative ("+10")
---- @field direction? "top" | "bottom" | "left" | "right" direction for split windows
 
 --- @class termWindowOps
 --- @field resize fun(options: termResizeOptions) resize the terminal window
@@ -225,26 +253,18 @@ end
 --- @field win termWindowOps window manipulation functions
 --- @field selected_text? string the text that was selected when triggered from visual mode
 
---- @class termFloatingWin
---- @field type "floating"
---- @field position? "top-left" | "top-center" | "top-right" | "bottom-left" | "bottom-right" | "bottom-center" | "left-center" | "right-center" position of floating window (defaults to "center")
---- @field width? string width as a percentage like "80%" (defaults to "80%")
---- @field height? string height as a percentage like "80%" (defaults to "80%")
---- @field margin? string margin as a percentage like "2%" (defaults to "2%")
-
---- @class termSplitWin
---- @field type "split"
---- @field direction string split direction: "top", "bottom", "left", "right"
---- @field size string size as a percentage like "30%"
+--- @class termWin
+--- @field position? "center" | "top-left" | "top-center" | "top-right" | "bottom-left" | "bottom-right" | "bottom-center" | "left-center" | "right-center" | "split-top" | "split-bottom" | "split-left" | "split-right" position of window (defaults to "center" for floating)
+--- @field width? string width as a percentage like "80%" (for floating windows, or split-left/split-right)
+--- @field height? string height as a percentage like "80%" (for floating windows, or split-top/split-bottom)
+--- @field margin? string margin as a percentage like "2%" (for floating windows only, defaults to "5%")
 
 --- @class termTerm
 --- @field name? string the name (needs to be unique, defaults to cmd)
 --- @field cmd string the command/program to run
 --- @field tmux? boolean whether to use tmux for this terminal (defaults to false)
 --- @field abduco? boolean whether to use abduco for this terminal (defaults to false)
---- @field win? termFloatingWin|termSplitWin window configuration (defaults to floating center)
---- @field width? string width as a percentage like "80%" (deprecated, use win.width)
---- @field height? string height as a percentage like "80%" (deprecated, use win.height)
+--- @field win? termWin window configuration (defaults to floating center)
 --- @field send_delay? number delay in milliseconds before sending commands (defaults to global config)
 --- @field setup? fun(details: termTermDetails) function to run on mount (receives termTermDetails table)
 
@@ -256,7 +276,7 @@ function M.term(opts)
 
 	if opts.win == nil then
 		opts.win = {
-			type = WINDOW_TYPE.FLOATING,
+			position = "center",
 		}
 	end
 
@@ -400,6 +420,10 @@ vim.api.nvim_create_user_command("TermRepositionCurrent", commands.create_reposi
 			"position=bottom-right",
 			"position=left-center",
 			"position=right-center",
+			"position=split-top",
+			"position=split-bottom",
+			"position=split-left",
+			"position=split-right",
 			"row=+10",
 			"row=+20",
 			"row=50%",
@@ -408,10 +432,6 @@ vim.api.nvim_create_user_command("TermRepositionCurrent", commands.create_reposi
 			"col=+20",
 			"col=50%",
 			"col=25%",
-			"direction=top",
-			"direction=bottom",
-			"direction=left",
-			"direction=right",
 		}
 	end,
 	desc = "Reposition the current terminal window",

@@ -2,24 +2,30 @@ local M = {}
 
 -- Default window configurations
 local FloatingDefaults = {
-	type = "floating",
-	height = "80%",
-	width = "80%",
 	position = "top-center",
+	width = "80%",
+	height = "80%",
 	margin = "5%",
 }
 
-local VerticalSplitDefaults = {
-	type = "split",
-	size = "30%",
-	direction = "right",
+local SplitDefaults = {
+	width = "30%",  -- Used for split-left/split-right
+	height = "40%", -- Used for split-top/split-bottom
 }
 
-local HorizontalSplitDefaults = {
-	type = "split",
-	size = "40%",
-	direction = "bottom",
-}
+--- Check if position indicates a split window
+--- @param position string position value
+--- @return boolean true if position is a split
+local function is_split_position(position)
+	return position and position:match("^split%-") ~= nil
+end
+
+--- Check if split position is horizontal (uses height)
+--- @param position string position value like "split-top" or "split-bottom"
+--- @return boolean true if horizontal split
+local function is_horizontal_split(position)
+	return position == "split-top" or position == "split-bottom"
+end
 
 --- Apply default values to a table, merging provided values with defaults
 --- @param tbl table table to apply defaults to
@@ -40,27 +46,26 @@ local function ApplyDefaults(tbl, defaults)
 	return applied
 end
 
---- Check if split direction is vertical (top/bottom)
---- @param opts table options with direction field
---- @return boolean true if direction is vertical
-local function is_vertical(opts)
-	return opts.direction == "bottom" or opts.direction == "top"
-end
-
---- Apply default window configuration based on window type
---- @param opts termSplitWin | termFloatingWin window configuration
---- @return termSplitWin | termFloatingWin window configuration with defaults applied
+--- Apply default window configuration based on position
+--- @param opts table window configuration with position field
+--- @return table window configuration with defaults applied
 function M.apply_win_defaults(opts)
-	if opts.type == "floating" then
-		return ApplyDefaults(opts, FloatingDefaults)
-	elseif opts.type == "split" then
-		if is_vertical(opts) then
-			return ApplyDefaults(opts, VerticalSplitDefaults)
+	local position = opts.position or "center"
+	
+	if is_split_position(position) then
+		-- For splits, apply split defaults
+		local defaults = {}
+		if is_horizontal_split(position) then
+			defaults.height = SplitDefaults.height
+			defaults.width = nil -- not used for horizontal splits
 		else
-			return ApplyDefaults(opts, HorizontalSplitDefaults)
+			defaults.width = SplitDefaults.width
+			defaults.height = nil -- not used for vertical splits
 		end
+		opts.position = position
+		return ApplyDefaults(opts, defaults)
 	else
-		-- Default to floating if type is unknown
+		-- For floating windows, apply floating defaults
 		return ApplyDefaults(opts, FloatingDefaults)
 	end
 end

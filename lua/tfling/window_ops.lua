@@ -6,6 +6,23 @@ local geometry = require("tfling.geometry")
 local MIN_WINDOW_PADDING = 2 -- minimum padding from screen edges
 local WINDOW_RELATIVE = "editor" -- relative to editor for floating windows
 
+--- Check if position indicates a split window
+--- @param position string position value
+--- @return boolean true if position is a split
+local function is_split_position(position)
+	return position and position:match("^split%-") ~= nil
+end
+
+--- Extract split direction from position
+--- @param position string position like "split-bottom"
+--- @return string direction like "bottom"
+local function get_split_direction(position)
+	if not is_split_position(position) then
+		return nil
+	end
+	return position:gsub("^split%-", "")
+end
+
 --- Parse a size string (number, percentage, or relative)
 --- @param size_str number|string size as number, percentage string ("50%"), or relative ("+5%")
 --- @param base number base value for percentage calculations
@@ -115,7 +132,6 @@ local function reposition_floating(win_id, options, term_instance)
 	-- Handle position-based repositioning
 	if options.position and term_instance then
 		local win_config = {
-			type = "floating",
 			position = options.position,
 			width = tostring(math.floor(current_config.width * 100 / vim.o.columns)) .. "%",
 			height = tostring(math.floor(current_config.height * 100 / vim.o.lines)) .. "%",
@@ -145,30 +161,30 @@ end
 
 --- Reposition a split window
 --- @param win_id number
---- @param options table with direction
+--- @param options table with position
 --- @param term_instance table terminal instance
 local function reposition_split(win_id, options, term_instance)
-	if options.direction then
+	if options.position and is_split_position(options.position) then
 		-- For split windows, we need to recreate the window in the new direction
 		local current_height = vim.api.nvim_win_get_height(win_id)
 		local current_width = vim.api.nvim_win_get_width(win_id)
-		local size_percent
-
-		if options.direction == "top" or options.direction == "bottom" then
-			size_percent = math.floor(current_height * 100 / vim.o.lines)
+		local direction = get_split_direction(options.position)
+		local is_horizontal = direction == "top" or direction == "bottom"
+		
+		local win_config = {
+			position = options.position,
+		}
+		
+		if is_horizontal then
+			win_config.height = tostring(math.floor(current_height * 100 / vim.o.lines)) .. "%"
 		else
-			size_percent = math.floor(current_width * 100 / vim.o.columns)
+			win_config.width = tostring(math.floor(current_width * 100 / vim.o.columns)) .. "%"
 		end
 
 		-- Close current window
 		vim.api.nvim_win_close(win_id, true)
 
 		-- Create new split in the specified direction
-		local win_config = {
-			type = "split",
-			direction = options.direction,
-			size = tostring(size_percent) .. "%",
-		}
 		term_instance:_create_split_window(win_config)
 		vim.api.nvim_win_set_buf(term_instance.win_id, term_instance.bufnr)
 		term_instance:setup_win_options()
@@ -177,7 +193,7 @@ end
 
 --- Reposition a terminal window
 --- @param win_id number
---- @param options table with position, row, col, and/or direction
+--- @param options table with position, row, and/or col
 --- @param term_instance table terminal instance
 function M.reposition(win_id, options, term_instance)
 	local current_config = vim.api.nvim_win_get_config(win_id)

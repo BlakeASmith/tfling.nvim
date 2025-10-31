@@ -111,23 +111,17 @@ function M.create_reposition_command(active_instances, terms)
 			reposition_options.col = col_match
 		end
 
-		-- Parse direction argument
-		local direction_match = opts.args:match("direction=([^%s]+)")
-		if direction_match then
-			reposition_options.direction = direction_match
-		end
-
 		-- If no arguments provided, show usage
 		if vim.tbl_isempty(reposition_options) then
 			vim.notify(
-				"Usage: termRepositionCurrent [position=<pos>] [row=<value>] [col=<value>] [direction=<dir>]",
+				"Usage: termRepositionCurrent [position=<pos>] [row=<value>] [col=<value>]",
 				vim.log.levels.INFO
 			)
 			vim.notify("Examples:", vim.log.levels.INFO)
 			vim.notify("  termRepositionCurrent position=top-left", vim.log.levels.INFO)
+			vim.notify("  termRepositionCurrent position=split-bottom", vim.log.levels.INFO)
 			vim.notify("  termRepositionCurrent row=+10 col=+20", vim.log.levels.INFO)
 			vim.notify("  termRepositionCurrent row=50% col=50%", vim.log.levels.INFO)
-			vim.notify("  termRepositionCurrent direction=top", vim.log.levels.INFO)
 			return
 		end
 
