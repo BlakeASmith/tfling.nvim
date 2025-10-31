@@ -46,21 +46,62 @@ local function ApplyDefaults(tbl, defaults)
 	return applied
 end
 
+--- Expand size field to width/height based on window type
+--- @param opts table window configuration
+--- @return table window configuration with size expanded
+local function expand_size(opts)
+	if not opts.size then
+		return opts
+	end
+
+	-- Validate: size and width/height are mutually exclusive
+	if opts.width or opts.height then
+		vim.notify(
+			"tfling: 'size' and 'width'/'height' are mutually exclusive. 'size' will override 'width'/'height'.",
+			vim.log.levels.WARN
+		)
+		-- Clear width/height when size is present
+		opts.width = nil
+		opts.height = nil
+	end
+
+	local position = opts.position or "center"
+	local size = opts.size
+
+	if is_split_position(position) then
+		-- For splits: size becomes width for vertical splits, height for horizontal splits
+		if is_horizontal_split(position) then
+			opts.height = size
+		else
+			opts.width = size
+		end
+	else
+		-- For floating: size becomes both width and height
+		opts.width = size
+		opts.height = size
+	end
+
+	-- Remove size field after expansion
+	opts.size = nil
+	return opts
+end
+
 --- Apply default window configuration based on position
 --- @param opts table window configuration with position field
 --- @return table window configuration with defaults applied
 function M.apply_win_defaults(opts)
 	local position = opts.position or "center"
 	
+	-- Expand size field first if present
+	opts = expand_size(opts)
+	
 	if is_split_position(position) then
 		-- For splits, apply split defaults
 		local defaults = {}
 		if is_horizontal_split(position) then
 			defaults.height = SplitDefaults.height
-			defaults.width = nil -- not used for horizontal splits
 		else
 			defaults.width = SplitDefaults.width
-			defaults.height = nil -- not used for vertical splits
 		end
 		opts.position = position
 		return ApplyDefaults(opts, defaults)

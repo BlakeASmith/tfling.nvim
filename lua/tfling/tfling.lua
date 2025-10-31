@@ -255,8 +255,9 @@ end
 
 --- @class termWin
 --- @field position? "center" | "top-left" | "top-center" | "top-right" | "bottom-left" | "bottom-right" | "bottom-center" | "left-center" | "right-center" | "split-top" | "split-bottom" | "split-left" | "split-right" position of window (defaults to "center" for floating)
---- @field width? string width as a percentage like "80%" (for floating windows, or split-left/split-right)
---- @field height? string height as a percentage like "80%" (for floating windows, or split-top/split-bottom)
+--- @field size? string size as a percentage like "80%" - for floating: sets both width and height; for splits: sets width (vertical) or height (horizontal). Mutually exclusive with width/height.
+--- @field width? string width as a percentage like "80%" (for floating windows, or split-left/split-right). Mutually exclusive with size.
+--- @field height? string height as a percentage like "80%" (for floating windows, or split-top/split-bottom). Mutually exclusive with size.
 --- @field margin? string margin as a percentage like "2%" (for floating windows only, defaults to "5%")
 
 --- @class termTerm
