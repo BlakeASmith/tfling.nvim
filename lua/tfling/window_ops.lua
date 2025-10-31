@@ -2,10 +2,6 @@ local M = {}
 
 local geometry = require("tfling.geometry")
 
--- Constants
-local MIN_WINDOW_PADDING = 2 -- minimum padding from screen edges
-local WINDOW_RELATIVE = "editor" -- relative to editor for floating windows
-
 --- Check if position indicates a split window
 --- @param position string position value
 --- @return boolean true if position is a split
@@ -83,8 +79,8 @@ local function resize_floating(win_id, options)
 	end
 
 	-- Ensure window stays within screen bounds
-	new_config.width = math.min(new_config.width, vim.o.columns - MIN_WINDOW_PADDING)
-	new_config.height = math.min(new_config.height, vim.o.lines - MIN_WINDOW_PADDING)
+	new_config.width = math.min(new_config.width, vim.o.columns - 2)
+	new_config.height = math.min(new_config.height, vim.o.lines - 2)
 
 	vim.api.nvim_win_set_config(win_id, new_config)
 end
@@ -106,7 +102,7 @@ end
 --- @param win_id number
 --- @param options table with width and/or height
 function M.resize(win_id, options)
-	if vim.api.nvim_win_get_config(win_id).relative == WINDOW_RELATIVE then
+	if vim.api.nvim_win_get_config(win_id).relative == "editor" then
 		resize_floating(win_id, options)
 	else
 		resize_split(win_id, options)
@@ -185,7 +181,7 @@ end
 --- @param options table with position, row, and/or col
 --- @param term_instance table terminal instance
 function M.reposition(win_id, options, term_instance)
-	if vim.api.nvim_win_get_config(win_id).relative == WINDOW_RELATIVE then
+	if vim.api.nvim_win_get_config(win_id).relative == "editor" then
 		reposition_floating(win_id, options, term_instance)
 	else
 		reposition_split(win_id, options, term_instance)

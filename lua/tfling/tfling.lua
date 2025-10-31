@@ -1,19 +1,5 @@
 local M = {}
 
--- Window type constants (for internal use)
-local WINDOW_TYPE = {
-	FLOATING = "floating",
-	SPLIT = "split",
-}
-
--- Split position constants
-local SPLIT_POSITION = {
-	TOP = "split-top",
-	BOTTOM = "split-bottom",
-	LEFT = "split-left",
-	RIGHT = "split-right",
-}
-
 --- Check if position indicates a split window
 --- @param position string position value
 --- @return boolean true if position is a split
@@ -39,7 +25,6 @@ local terms = {}
 
 -- Constants
 local DEFAULT_SEND_DELAY = 100 -- milliseconds
-local MIN_WINDOW_PADDING = 2 -- minimum padding from screen edges
 
 -- Configuration
 local Config = {

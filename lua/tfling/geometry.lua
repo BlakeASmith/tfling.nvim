@@ -1,24 +1,5 @@
 local M = {}
 
--- Position constants
-local POSITION = {
-	CENTER = "center",
-	TOP_LEFT = "top-left",
-	TOP_CENTER = "top-center",
-	TOP_RIGHT = "top-right",
-	BOTTOM_LEFT = "bottom-left",
-	BOTTOM_CENTER = "bottom-center",
-	BOTTOM_RIGHT = "bottom-right",
-	LEFT_CENTER = "left-center",
-	RIGHT_CENTER = "right-center",
-}
-
--- Window configuration constants
-local WINDOW_STYLE = "minimal"
-local WINDOW_RELATIVE = "editor"
-local WINDOW_BORDER = "rounded"
-local MIN_WINDOW_PADDING = 2
-
 --- Calculate floating window geometry from configuration
 --- @param win_config table window configuration with width, height, margin, and position
 --- @return table nvim_open_win configuration table
@@ -29,37 +10,37 @@ function M.floating(win_config)
 	local margin = math.floor(math.min(vim.o.lines, vim.o.columns) * (tonumber((win_config.margin:gsub("%%", ""))) / 100))
 
 	-- Ensure it's not larger than the screen
-	width = math.min(width, vim.o.columns - MIN_WINDOW_PADDING)
-	height = math.min(height, vim.o.lines - MIN_WINDOW_PADDING)
+	width = math.min(width, vim.o.columns - 2)
+	height = math.min(height, vim.o.lines - 2)
 
 	-- Calculate position based on placement
 	local row, col
 	local position = win_config.position
-	if position == POSITION.CENTER then
+	if position == "center" then
 		row = math.floor((vim.o.lines - height) / 2)
 		col = math.floor((vim.o.columns - width) / 2)
-	elseif position == POSITION.TOP_LEFT then
+	elseif position == "top-left" then
 		row = margin
 		col = margin
-	elseif position == POSITION.TOP_CENTER then
+	elseif position == "top-center" then
 		row = margin
 		col = math.floor((vim.o.columns - width) / 2)
-	elseif position == POSITION.TOP_RIGHT then
+	elseif position == "top-right" then
 		row = margin
 		col = vim.o.columns - width - margin
-	elseif position == POSITION.BOTTOM_LEFT then
+	elseif position == "bottom-left" then
 		row = vim.o.lines - height - margin
 		col = margin
-	elseif position == POSITION.BOTTOM_CENTER then
+	elseif position == "bottom-center" then
 		row = vim.o.lines - height - margin
 		col = math.floor((vim.o.columns - width) / 2)
-	elseif position == POSITION.BOTTOM_RIGHT then
+	elseif position == "bottom-right" then
 		row = vim.o.lines - height - margin
 		col = vim.o.columns - width - margin
-	elseif position == POSITION.LEFT_CENTER then
+	elseif position == "left-center" then
 		row = math.floor((vim.o.lines - height) / 2)
 		col = margin
-	elseif position == POSITION.RIGHT_CENTER then
+	elseif position == "right-center" then
 		row = math.floor((vim.o.lines - height) / 2)
 		col = vim.o.columns - width - margin
 	else
@@ -70,13 +51,13 @@ function M.floating(win_config)
 
 	-- Return the full table for nvim_open_win
 	return {
-		relative = WINDOW_RELATIVE,
-		style = WINDOW_STYLE,
+		relative = "editor",
+		style = "minimal",
 		width = width,
 		height = height,
 		row = row,
 		col = col,
-		border = WINDOW_BORDER,
+		border = "rounded",
 	}
 end
 
