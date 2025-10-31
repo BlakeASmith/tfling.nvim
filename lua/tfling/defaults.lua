@@ -1,5 +1,6 @@
 local M = {}
 
+-- Default window configurations
 local FloatingDefaults = {
 	type = "floating",
 	height = "80%",
@@ -20,6 +21,10 @@ local HorizontalSplitDefaults = {
 	direction = "bottom",
 }
 
+--- Apply default values to a table, merging provided values with defaults
+--- @param tbl table table to apply defaults to
+--- @param defaults table default values
+--- @return table merged table with defaults applied
 local function ApplyDefaults(tbl, defaults)
 	local applied = {}
 	for key, value in pairs(tbl) do
@@ -35,26 +40,29 @@ local function ApplyDefaults(tbl, defaults)
 	return applied
 end
 
-local is_vertical = function(opts)
+--- Check if split direction is vertical (top/bottom)
+--- @param opts table options with direction field
+--- @return boolean true if direction is vertical
+local function is_vertical(opts)
 	return opts.direction == "bottom" or opts.direction == "top"
 end
 
----
--- Sets default win config
---- @param opts termSplitWin | termFloatingWin
+--- Apply default window configuration based on window type
+--- @param opts termSplitWin | termFloatingWin window configuration
+--- @return termSplitWin | termFloatingWin window configuration with defaults applied
 function M.apply_win_defaults(opts)
 	if opts.type == "floating" then
-		opts = ApplyDefaults(opts, FloatingDefaults)
+		return ApplyDefaults(opts, FloatingDefaults)
 	elseif opts.type == "split" then
 		if is_vertical(opts) then
-			opts = ApplyDefaults(opts, VerticalSplitDefaults)
+			return ApplyDefaults(opts, VerticalSplitDefaults)
 		else
-			opts = ApplyDefaults(opts, HorizontalSplitDefaults)
+			return ApplyDefaults(opts, HorizontalSplitDefaults)
 		end
 	else
+		-- Default to floating if type is unknown
 		return ApplyDefaults(opts, FloatingDefaults)
 	end
-	return opts
 end
 
 return M

@@ -2,11 +2,15 @@ local M = {}
 
 local geometry = require("tfling.geometry")
 
+-- Constants
+local MIN_WINDOW_PADDING = 2 -- minimum padding from screen edges
+local WINDOW_RELATIVE = "editor" -- relative to editor for floating windows
+
 --- Parse a size string (number, percentage, or relative)
---- @param size_str number|string
+--- @param size_str number|string size as number, percentage string ("50%"), or relative ("+5%")
 --- @param base number base value for percentage calculations
 --- @param current? number current value for relative calculations
---- @return number
+--- @return number parsed size value
 local function parse_size(size_str, base, current)
 	if type(size_str) == "string" then
 		if size_str:match("^%+%d+%%$") then
@@ -66,8 +70,8 @@ local function resize_floating(win_id, options)
 	end
 
 	-- Ensure window stays within screen bounds
-	new_config.width = math.min(new_config.width, vim.o.columns - 2)
-	new_config.height = math.min(new_config.height, vim.o.lines - 2)
+	new_config.width = math.min(new_config.width, vim.o.columns - MIN_WINDOW_PADDING)
+	new_config.height = math.min(new_config.height, vim.o.lines - MIN_WINDOW_PADDING)
 
 	vim.api.nvim_win_set_config(win_id, new_config)
 end
@@ -93,7 +97,7 @@ end
 function M.resize(win_id, options)
 	local current_config = vim.api.nvim_win_get_config(win_id)
 
-	if current_config.relative == "editor" then
+	if current_config.relative == WINDOW_RELATIVE then
 		resize_floating(win_id, options)
 	else
 		resize_split(win_id, options)
@@ -178,7 +182,7 @@ end
 function M.reposition(win_id, options, term_instance)
 	local current_config = vim.api.nvim_win_get_config(win_id)
 
-	if current_config.relative == "editor" then
+	if current_config.relative == WINDOW_RELATIVE then
 		reposition_floating(win_id, options, term_instance)
 	else
 		reposition_split(win_id, options, term_instance)

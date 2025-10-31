@@ -1,8 +1,34 @@
 local M = {}
 
+-- Window type constants
+local WINDOW_TYPE = {
+	FLOATING = "floating",
+	SPLIT = "split",
+}
+
+-- Split direction constants
+local SPLIT_DIRECTION = {
+	TOP = "top",
+	BOTTOM = "bottom",
+	LEFT = "left",
+	RIGHT = "right",
+}
+
+-- Terminal instance management
 local Terminal = {}
 Terminal.__index = Terminal
 local active_instances = {}
+local terms = {}
+
+-- Constants
+local DEFAULT_SEND_DELAY = 100 -- milliseconds
+local MIN_WINDOW_PADDING = 2 -- minimum padding from screen edges
+
+-- Configuration
+local Config = {
+	always = function(term) end,
+	send_delay = DEFAULT_SEND_DELAY,
+}
 
 local util = require("tfling.util")
 local get_selected_text = util.get_selected_text
@@ -11,11 +37,13 @@ local geometry = require("tfling.geometry")
 local window_ops = require("tfling.window_ops")
 local commands = require("tfling.commands")
 
-
-function New(config)
-	if not config.cmd then
-		vim.notify("FloatingTerm:new() requires 'cmd'", vim.log.levels.ERROR)
-		return
+--- Create a new terminal instance
+--- @param config table configuration table with cmd field
+--- @return table|nil terminal instance or nil if creation fails
+local function create_terminal(config)
+	if not config or not config.cmd then
+		vim.notify("tfling: create_terminal() requires 'cmd' field", vim.log.levels.ERROR)
+		return nil
 	end
 
 	local instance = setmetatable({}, Terminal)
@@ -27,16 +55,21 @@ function New(config)
 	return instance
 end
 
+--- Toggle terminal window visibility
+--- @param opts table optional configuration with win field
 function Terminal:toggle(opts)
 	if opts == nil then
 		self:hide()
+		return
 	end
-	if opts and opts.win then
+
+	if opts.win then
 		local win_config = defaults.apply_win_defaults(opts.win)
 		opts.win = win_config
 	end
+
 	if self.win_id and vim.api.nvim_win_is_valid(self.win_id) then
-		if opts.win.type == "floating" then
+		if opts.win and opts.win.type == WINDOW_TYPE.FLOATING then
 			local final_win_opts = geometry.floating(opts.win)
 			vim.api.nvim_win_set_config(self.win_id, final_win_opts)
 			vim.api.nvim_set_current_win(self.win_id)
@@ -49,6 +82,7 @@ function Terminal:toggle(opts)
 	end
 end
 
+--- Hide the terminal window
 function Terminal:hide()
 	if not (self.win_id and vim.api.nvim_win_is_valid(self.win_id)) then
 		return
@@ -58,21 +92,20 @@ function Terminal:hide()
 	self.win_id = nil
 end
 
----
--- Opens the terminal window.
---
+--- Open the terminal window
+--- @param opts table optional configuration with win field
 function Terminal:open(opts)
 	local win_config = defaults.apply_win_defaults(opts.win)
 
-	-- 2. If window is valid, just focus it
+	-- If window is valid, just focus it
 	if self.win_id and vim.api.nvim_win_is_valid(self.win_id) then
 		vim.api.nvim_set_current_win(self.win_id)
 		return
 	end
 
-	-- 3. If buffer exists, create window based on type
+	-- If buffer exists, create window based on type
 	if self.bufnr and vim.api.nvim_buf_is_valid(self.bufnr) then
-		if win_config.type == "floating" then
+		if win_config.type == WINDOW_TYPE.FLOATING then
 			local final_win_opts = geometry.floating(win_config)
 			self.win_id = vim.api.nvim_open_win(self.bufnr, true, final_win_opts)
 		else
@@ -84,12 +117,12 @@ function Terminal:open(opts)
 		return
 	end
 
-	-- 4. If new, create everything
+	-- Create new buffer and window
 	self.bufnr = vim.api.nvim_create_buf(true, true)
 	vim.bo[self.bufnr].bufhidden = "hide"
 	vim.bo[self.bufnr].filetype = "tfling"
 
-	if win_config.type == "floating" then
+	if win_config.type == WINDOW_TYPE.FLOATING then
 		local final_win_opts = geometry.floating(win_config)
 		self.win_id = vim.api.nvim_open_win(self.bufnr, true, final_win_opts)
 	else
@@ -113,24 +146,26 @@ function Terminal:open(opts)
 	end)
 end
 
+--- Create a split window for the terminal
+--- @param win_config table window configuration with size and direction fields
 function Terminal:_create_split_window(win_config)
 	local size_str = win_config.size
 	local size_percent = tonumber((size_str:gsub("%%", "")))
 	local actual_size
 
-	if win_config.direction == "top" or win_config.direction == "bottom" then
+	if win_config.direction == SPLIT_DIRECTION.TOP or win_config.direction == SPLIT_DIRECTION.BOTTOM then
 		-- Horizontal split - calculate percentage of total lines
 		actual_size = math.floor(vim.o.lines * (size_percent / 100))
-		if win_config.direction == "top" then
+		if win_config.direction == SPLIT_DIRECTION.TOP then
 			vim.cmd("topleft split")
 		else
 			vim.cmd("botright split")
 		end
 		vim.cmd("resize " .. actual_size)
-	elseif win_config.direction == "left" or win_config.direction == "right" then
+	elseif win_config.direction == SPLIT_DIRECTION.LEFT or win_config.direction == SPLIT_DIRECTION.RIGHT then
 		-- Vertical split - calculate percentage of total columns
 		actual_size = math.floor(vim.o.columns * (size_percent / 100))
-		if win_config.direction == "left" then
+		if win_config.direction == SPLIT_DIRECTION.LEFT then
 			vim.cmd("topleft vsplit")
 		else
 			vim.cmd("botright vsplit")
@@ -145,6 +180,7 @@ function Terminal:_create_split_window(win_config)
 	vim.api.nvim_win_set_buf(self.win_id, self.bufnr)
 end
 
+--- Setup window options for the terminal window
 function Terminal:setup_win_options()
 	local win_id = self.win_id
 	local current_config = vim.api.nvim_win_get_config(win_id)
@@ -156,6 +192,7 @@ function Terminal:setup_win_options()
 	vim.wo[win_id].signcolumn = "no"
 end
 
+--- Hide the current terminal window
 function M.hide_current()
 	local current_win = vim.api.nvim_get_current_win()
 	local term_instance = active_instances[current_win]
@@ -163,17 +200,6 @@ function M.hide_current()
 		term_instance:hide()
 	end
 end
-
-local terms = {}
-
--- Constants
-local DEFAULT_SEND_DELAY = 100 -- milliseconds
-
--- Configuration
-local Config = {
-	always = function(term) end,
-	send_delay = DEFAULT_SEND_DELAY,
-}
 
 --- @class termResizeOptions
 --- @field width? number|string width as number, percentage ("50%"), or relative ("+5%")
@@ -230,7 +256,7 @@ function M.term(opts)
 
 	if opts.win == nil then
 		opts.win = {
-			type = "floating",
+			type = WINDOW_TYPE.FLOATING,
 		}
 	end
 
@@ -262,10 +288,13 @@ function M.term(opts)
 	-- Get or create terminal instance
 	local term_instance = terms[opts.name]
 	if not term_instance then
-		term_instance = New({
+		term_instance = create_terminal({
 			cmd = actual_cmd,
 			win_opts = {}, -- Legacy support
 		})
+		if not term_instance then
+			return -- Error already notified
+		end
 		terms[opts.name] = term_instance
 	end
 

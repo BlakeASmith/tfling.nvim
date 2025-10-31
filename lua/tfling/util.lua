@@ -1,5 +1,8 @@
 local M = {}
 
+--- Get the currently selected text in visual mode
+--- Returns nil if not in visual mode or if no valid selection exists
+--- @return string|nil selected text or nil if not in visual mode
 function M.get_selected_text()
 	-- Check if we're currently in visual mode using nvim_get_mode()
 	local mode_info = vim.api.nvim_get_mode()
