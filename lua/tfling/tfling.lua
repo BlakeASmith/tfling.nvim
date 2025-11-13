@@ -970,4 +970,85 @@ end, {
 	desc = "Reposition the current terminal window",
 })
 
+vim.api.nvim_create_user_command("TFlingListBuffers", function()
+	local open_buffers = {}
+	for name, instance in pairs(terms) do
+		if instance.bufnr and vim.api.nvim_buf_is_valid(instance.bufnr) then
+			local is_open = false
+			if instance.win_id and vim.api.nvim_win_is_valid(instance.win_id) then
+				is_open = true
+			end
+			table.insert(open_buffers, {
+				name = name,
+				bufnr = instance.bufnr,
+				win_id = instance.win_id,
+				is_open = is_open,
+				cmd = instance.cmd,
+			})
+		end
+	end
+
+	if #open_buffers == 0 then
+		vim.notify("No open tfling buffers", vim.log.levels.INFO)
+		return
+	end
+
+	-- Sort by name for consistent output
+	table.sort(open_buffers, function(a, b)
+		return a.name < b.name
+	end)
+
+	-- Display the list
+	local lines = { "Open tfling buffers:" }
+	for _, buf_info in ipairs(open_buffers) do
+		local status = buf_info.is_open and "[OPEN]" or "[HIDDEN]"
+		table.insert(lines, string.format("  %s %s (buf: %d, cmd: %s)", status, buf_info.name, buf_info.bufnr, buf_info.cmd))
+	end
+
+	vim.notify(table.concat(lines, "\n"), vim.log.levels.INFO)
+end, {
+	desc = "List all open tfling buffers",
+})
+
+vim.api.nvim_create_user_command("TFlingGoToBuffer", function(opts)
+	if not opts.args or opts.args == "" then
+		vim.notify("Usage: TFlingGoToBuffer <name>", vim.log.levels.ERROR)
+		vim.notify("Use :TFlingListBuffers to see available buffers", vim.log.levels.INFO)
+		return
+	end
+
+	local name = opts.args:match("^%s*(.-)%s*$") -- trim whitespace
+	local term_instance = terms[name]
+
+	if not term_instance then
+		vim.notify(string.format("No tfling buffer found with name: %s", name), vim.log.levels.ERROR)
+		vim.notify("Use :TFlingListBuffers to see available buffers", vim.log.levels.INFO)
+		return
+	end
+
+	if not term_instance.bufnr or not vim.api.nvim_buf_is_valid(term_instance.bufnr) then
+		vim.notify(string.format("Buffer for '%s' is no longer valid", name), vim.log.levels.ERROR)
+		return
+	end
+
+	-- Use toggle to either focus existing window or reopen with default config
+	-- Since we don't store the original window config, use default floating window
+	local win_config = defaults.apply_win_defaults({
+		type = "floating",
+	})
+	term_instance:toggle({ win = win_config })
+end, {
+	nargs = 1,
+	complete = function()
+		local completions = {}
+		for name, instance in pairs(terms) do
+			if instance.bufnr and vim.api.nvim_buf_is_valid(instance.bufnr) then
+				table.insert(completions, name)
+			end
+		end
+		return completions
+	end,
+	desc = "Go to a specific tfling buffer by name",
+})
+
 return M
