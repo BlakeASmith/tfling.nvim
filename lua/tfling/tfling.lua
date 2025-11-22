@@ -6,6 +6,8 @@ local Terminal = {}
 Terminal.__index = Terminal
 local active_instances = {}
 local terms = {}
+local buffer_list = {} -- Ordered list of tfling buffer names
+local current_index = nil -- Index into buffer_list for currently visible buffer
 
 local util = require("tfling.util")
 local get_selected_text = util.get_selected_text
@@ -124,6 +126,7 @@ function New(config)
 	instance.bufnr = config.bufnr
 	instance.win_id = nil
 	instance.job_id = nil
+	instance.name = config.name
 
 	if config.cmd then
 		-- Handle session providers (tmux/abduco)
@@ -170,6 +173,7 @@ end
 function Terminal:toggle(opts)
 	if opts == nil then
 		self:hide()
+		return
 	end
 	if opts and opts.win then
 		local win_config = defaults.apply_win_defaults(opts.win)
@@ -184,6 +188,13 @@ function Terminal:toggle(opts)
 			-- For splits, just focus the existing window
 			vim.api.nvim_set_current_win(self.win_id)
 		end
+		-- Update current_index when focusing existing window
+		for i, name in ipairs(buffer_list) do
+			if name == self.name then
+				current_index = i
+				break
+			end
+		end
 	else
 		self:open(opts)
 	end
@@ -196,6 +207,10 @@ function Terminal:hide()
 	active_instances[self.win_id] = nil
 	vim.api.nvim_win_close(self.win_id, true)
 	self.win_id = nil
+	-- Update current_index if this was the current buffer
+	if current_index and buffer_list[current_index] == self.name then
+		current_index = nil
+	end
 end
 
 ---
@@ -207,6 +222,13 @@ function Terminal:open(opts)
 	-- 2. If window is valid, just focus it
 	if self.win_id and vim.api.nvim_win_is_valid(self.win_id) then
 		vim.api.nvim_set_current_win(self.win_id)
+		-- Update current_index
+		for i, name in ipairs(buffer_list) do
+			if name == self.name then
+				current_index = i
+				break
+			end
+		end
 		return
 	end
 
@@ -239,6 +261,13 @@ function Terminal:open(opts)
 	end
 	active_instances[self.win_id] = self
 	self:setup_win_options(win_config)
+	-- Update current_index when opening a window
+	for i, name in ipairs(buffer_list) do
+		if name == self.name then
+			current_index = i
+			break
+		end
+	end
 
 	if self.init then
 		vim.api.nvim_win_call(self.win_id, function()
@@ -551,6 +580,8 @@ local function create_tfling(opts)
 			tmux = opts.tmux,
 			abduco = opts.abduco,
 		})
+		-- Add to buffer_list if it's a new instance
+		table.insert(buffer_list, opts.name)
 	end
 
 	-- Apply defaults to win configuration
@@ -893,6 +924,13 @@ vim.api.nvim_create_user_command("TFlingGoToBuffer", function(opts)
 	local win_config = defaults.apply_win_defaults({
 		type = "floating",
 	})
+	-- Update current_index before toggling
+	for i, buf_name in ipairs(buffer_list) do
+		if buf_name == name then
+			current_index = i
+			break
+		end
+	end
 	term_instance:toggle({ win = win_config })
 end, {
 	nargs = 1,
@@ -908,124 +946,143 @@ end, {
 	desc = "Go to a specific tfling buffer by name",
 })
 
--- Helper function to get all valid tfling buffers sorted by name
-local function get_sorted_buffers()
-	local buffer_list = {}
-	for name, instance in pairs(terms) do
-		if instance.bufnr and vim.api.nvim_buf_is_valid(instance.bufnr) then
-			table.insert(buffer_list, { name = name, instance = instance })
+-- Helper function to get valid buffer names from buffer_list
+local function get_valid_buffer_names()
+	local valid_names = {}
+	for _, name in ipairs(buffer_list) do
+		local instance = terms[name]
+		if instance and instance.bufnr and vim.api.nvim_buf_is_valid(instance.bufnr) then
+			table.insert(valid_names, name)
 		end
 	end
-	table.sort(buffer_list, function(a, b)
-		return a.name < b.name
-	end)
-	return buffer_list
-end
-
--- Helper function to find the currently visible tfling buffer
-local function find_current_buffer()
-	local current_buf = vim.api.nvim_get_current_buf()
-	local current_win = vim.api.nvim_get_current_win()
-	
-	-- First check if current window is in active_instances
-	local term_instance = active_instances[current_win]
-	if term_instance then
-		return term_instance.name
-	end
-	
-	-- Check if current buffer is a tfling buffer
-	if vim.bo[current_buf].filetype == "tfling" then
-		for name, instance in pairs(terms) do
-			if instance.bufnr == current_buf then
-				return name
-			end
-		end
-	end
-	
-	return nil
+	return valid_names
 end
 
 vim.api.nvim_create_user_command("TflingNext", function()
-	local buffer_list = get_sorted_buffers()
+	local valid_names = get_valid_buffer_names()
 	
-	if #buffer_list == 0 then
+	if #valid_names == 0 then
 		vim.notify("No tfling buffers available", vim.log.levels.WARN)
 		return
 	end
 	
-	local current_name = find_current_buffer()
-	local current_index = nil
+	-- Find current buffer name from current_index
+	local current_name = nil
+	if current_index and current_index >= 1 and current_index <= #buffer_list then
+		current_name = buffer_list[current_index]
+		-- Verify it's still valid
+		local instance = terms[current_name]
+		if not instance or not instance.bufnr or not vim.api.nvim_buf_is_valid(instance.bufnr) then
+			current_name = nil
+		end
+	end
 	
-	-- Find current buffer index
+	-- Find index in valid_names
+	local valid_index = nil
 	if current_name then
-		for i, buf_info in ipairs(buffer_list) do
-			if buf_info.name == current_name then
-				current_index = i
+		for i, name in ipairs(valid_names) do
+			if name == current_name then
+				valid_index = i
 				break
 			end
 		end
 	end
 	
-	-- Determine next index
-	local next_index
-	if current_index then
-		-- Wrap around to first if at the end
-		next_index = (current_index % #buffer_list) + 1
+	-- Hide current buffer if found
+	if valid_index then
+		local current_instance = terms[current_name]
+		if current_instance and current_instance.win_id and vim.api.nvim_win_is_valid(current_instance.win_id) then
+			current_instance:hide()
+		end
+		-- Move to next (wrap around)
+		valid_index = (valid_index % #valid_names) + 1
 	else
-		-- If no current buffer, go to first
-		next_index = 1
+		-- Start at first if no current
+		valid_index = 1
 	end
 	
-	-- Navigate to next buffer
-	local next_buf_info = buffer_list[next_index]
-	local win_config = defaults.apply_win_defaults({
-		type = "floating",
-	})
-	next_buf_info.instance:toggle({ win = win_config })
+	-- Show next buffer
+	local next_name = valid_names[valid_index]
+	local next_instance = terms[next_name]
+	if next_instance then
+		-- Update current_index to point to this buffer in buffer_list
+		for i, name in ipairs(buffer_list) do
+			if name == next_name then
+				current_index = i
+				break
+			end
+		end
+		local win_config = defaults.apply_win_defaults({
+			type = "floating",
+		})
+		next_instance:toggle({ win = win_config })
+	end
 end, {
 	desc = "Navigate to the next tfling buffer",
 })
 
 vim.api.nvim_create_user_command("TflingPrev", function()
-	local buffer_list = get_sorted_buffers()
+	local valid_names = get_valid_buffer_names()
 	
-	if #buffer_list == 0 then
+	if #valid_names == 0 then
 		vim.notify("No tfling buffers available", vim.log.levels.WARN)
 		return
 	end
 	
-	local current_name = find_current_buffer()
-	local current_index = nil
+	-- Find current buffer name from current_index
+	local current_name = nil
+	if current_index and current_index >= 1 and current_index <= #buffer_list then
+		current_name = buffer_list[current_index]
+		-- Verify it's still valid
+		local instance = terms[current_name]
+		if not instance or not instance.bufnr or not vim.api.nvim_buf_is_valid(instance.bufnr) then
+			current_name = nil
+		end
+	end
 	
-	-- Find current buffer index
+	-- Find index in valid_names
+	local valid_index = nil
 	if current_name then
-		for i, buf_info in ipairs(buffer_list) do
-			if buf_info.name == current_name then
-				current_index = i
+		for i, name in ipairs(valid_names) do
+			if name == current_name then
+				valid_index = i
 				break
 			end
 		end
 	end
 	
-	-- Determine previous index
-	local prev_index
-	if current_index then
-		-- Wrap around to last if at the beginning
-		prev_index = current_index - 1
-		if prev_index < 1 then
-			prev_index = #buffer_list
+	-- Hide current buffer if found
+	if valid_index then
+		local current_instance = terms[current_name]
+		if current_instance and current_instance.win_id and vim.api.nvim_win_is_valid(current_instance.win_id) then
+			current_instance:hide()
+		end
+		-- Move to previous (wrap around)
+		valid_index = valid_index - 1
+		if valid_index < 1 then
+			valid_index = #valid_names
 		end
 	else
-		-- If no current buffer, go to last
-		prev_index = #buffer_list
+		-- Start at last if no current
+		valid_index = #valid_names
 	end
 	
-	-- Navigate to previous buffer
-	local prev_buf_info = buffer_list[prev_index]
-	local win_config = defaults.apply_win_defaults({
-		type = "floating",
-	})
-	prev_buf_info.instance:toggle({ win = win_config })
+	-- Show previous buffer
+	local prev_name = valid_names[valid_index]
+	local prev_instance = terms[prev_name]
+	if prev_instance then
+		-- Update current_index to point to this buffer in buffer_list
+		for i, name in ipairs(buffer_list) do
+			if name == prev_name then
+				current_index = i
+				break
+			end
+		end
+		local win_config = defaults.apply_win_defaults({
+			type = "floating",
+		})
+		prev_instance:toggle({ win = win_config })
+	end
 end, {
 	desc = "Navigate to the previous tfling buffer",
 })
