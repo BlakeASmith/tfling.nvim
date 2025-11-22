@@ -70,8 +70,8 @@ exp:destroy()
 
 ```lua
 -- Register elements
-exp:register_window(win_id, options?)
-exp:register_tab(tab_id, options?)
+exp:register_window(win_id)
+exp:register_tab(tab_id)
 
 -- Unregister elements
 exp:unregister_window(win_id)
@@ -86,24 +86,6 @@ exp:register({
 -- Query registered elements
 local windows = exp:get_windows()
 local tabs = exp:get_tabs()
-```
-
-### Registration Options
-
-```lua
--- Window options
-{
-  save_config = true,        -- Save window config for restoration (default: true)
-  restore_on_show = true,    -- Restore window config when showing (default: true)
-  close_on_hide = false,     -- Close window when hiding (default: false)
-  close_on_destroy = true,   -- Close window when destroying (default: true)
-}
-
--- Tab options
-{
-  close_on_hide = false,     -- Close tab when hiding (default: false)
-  close_on_destroy = true,   -- Close tab when destroying (default: true)
-}
 ```
 
 ### Hooks
@@ -181,8 +163,7 @@ StateManager {
 2. Hide dependents first
 3. Save window configurations
 4. Save tab states
-5. Close windows/tabs if configured
-6. Execute `after_hide` hook
+5. Execute `after_hide` hook
 
 ### State Saving
 
@@ -265,7 +246,6 @@ exp:toggle()
 
 ### Phase 2: Registration System (2-3 weeks)
 - Window/tab registration APIs
-- Registration options
 - Bulk registration
 
 ### Phase 3: Lifecycle Management (2-3 weeks)
