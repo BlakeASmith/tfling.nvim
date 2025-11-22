@@ -1087,4 +1087,41 @@ end, {
 	desc = "Navigate to the previous tfling buffer",
 })
 
+vim.api.nvim_create_user_command("TflingToggleCurrent", function()
+	-- Find current buffer name from current_index
+	local current_name = nil
+	if current_index and current_index >= 1 and current_index <= #buffer_list then
+		current_name = buffer_list[current_index]
+		-- Verify it's still valid
+		local instance = terms[current_name]
+		if not instance or not instance.bufnr or not vim.api.nvim_buf_is_valid(instance.bufnr) then
+			current_name = nil
+		end
+	end
+	
+	if not current_name then
+		vim.notify("No current tfling buffer to toggle", vim.log.levels.WARN)
+		return
+	end
+	
+	local current_instance = terms[current_name]
+	if not current_instance then
+		vim.notify("Current tfling buffer instance not found", vim.log.levels.WARN)
+		return
+	end
+	
+	-- Toggle: hide if visible, show if hidden
+	if current_instance.win_id and vim.api.nvim_win_is_valid(current_instance.win_id) then
+		current_instance:hide()
+	else
+		-- Show the buffer with default floating window config
+		local win_config = defaults.apply_win_defaults({
+			type = "floating",
+		})
+		current_instance:toggle({ win = win_config })
+	end
+end, {
+	desc = "Toggle the current tfling buffer (hide if visible, show if hidden)",
+})
+
 return M
