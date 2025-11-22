@@ -458,17 +458,6 @@ experience:register_tab(tab, {
 })
 ```
 
-## Migration from v1
-
-**Note**: There is no v1 compatibility layer. Plugins using Tfling v1 will need to be updated to use the registration model.
-
-### Migration Steps
-
-1. Replace `tfling.term()` / `tfling.buff()` with `tfling.create()`
-2. Create windows/buffers manually
-3. Register created elements with experience
-4. Move setup logic to hooks
-
 ## File Structure
 
 ```

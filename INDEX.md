@@ -27,10 +27,9 @@ Comprehensive design document covering:
 - Core philosophy and concepts
 - Architecture overview
 - API design
-- Layout system
+- Registration system
 - Hook system
 - Advanced features
-- Migration from v1
 
 **Read this** for understanding the overall design and architecture.
 
@@ -57,7 +56,7 @@ Deep dive into implementation details:
 
 Practical examples showing:
 - Basic usage
-- Advanced layouts
+- Registration patterns
 - Hook implementations
 - Group management
 - Plugin integration
@@ -130,11 +129,11 @@ Quick reference for all APIs:
 ### Experience
 A logical grouping of windows/tabs/splits that can be toggled as a unit.
 
-### Layout
-Defines the structure: floats, splits, tabs, containers, and their relationships.
+### Registration
+UI elements (windows, buffers, tabs) are registered with experiences. Tfling manages their lifecycle but doesn't create them.
 
-### Buffer Specification
-Describes content: terminal, file, scratch buffer, or function-generated.
+### Lifecycle Management
+Show/hide/toggle operations that save and restore window/buffer/tab state.
 
 ### Hooks
 Lifecycle and event hooks for custom behavior.
@@ -148,14 +147,21 @@ Collections of experiences managed together.
 local tfling = require("tfling.v2")
 
 -- Create an experience
-local exp = tfling.create({
-  id = "my-tool",
-  layout = {
-    type = "float",
-    config = { width = "80%", height = "60%", position = "center" },
-    buffer = { type = "terminal", source = "bash" },
-  },
+local exp = tfling.create({ id = "my-tool" })
+
+-- Plugin creates window
+local buf = vim.api.nvim_create_buf(true, true)
+local win = vim.api.nvim_open_win(buf, true, {
+  relative = "editor",
+  width = 50,
+  height = 10,
+  row = 10,
+  col = 30,
 })
+
+-- Register with Tfling
+exp:register_window(win)
+exp:register_buffer(buf)
 
 -- Toggle it
 exp:toggle()
@@ -173,11 +179,11 @@ exp:toggle()
 
 ⏳ **Implementation Phase**: Not started
 - [ ] Phase 1: Core state management
-- [ ] Phase 2: Layout engine
-- [ ] Phase 3: Buffer management
+- [ ] Phase 2: Registration system
+- [ ] Phase 3: Lifecycle management
 - [ ] Phase 4: Hook system
-- [ ] Phase 5: Advanced features
-- [ ] Phase 6: Compatibility layer
+- [ ] Phase 5: Window operations
+- [ ] Phase 6: Advanced features
 - [ ] Phase 7: Polish & optimization
 
 ## Document Relationships

@@ -55,43 +55,41 @@ exp:destroy()
 
 ### ✅ Core Features
 - State management for experiences
-- Support for floats, splits, tabs, and containers
-- Nested layouts
-- Buffer management (terminal, file, scratch, function)
+- Window/buffer/tab registration
+- Lifecycle management (show/hide/toggle)
+- State saving and restoration
 - Lifecycle hooks
 - Window restoration
 
 ### ✅ Advanced Features
 - Experience groups
 - Dependency management
-- Dynamic layout modification
 - Window operations (resize, reposition)
-- Layout builder API
-- v1 compatibility layer
+- Bulk registration
 
 ## Architecture
 
 ```
 StateManager (tracks all experiences)
     ↓
-Experience (logical grouping)
+Experience (logical grouping / registry)
     ↓
-Layout (defines structure)
+Registered Elements (windows/buffers/tabs)
     ↓
-Window/Buffer (actual Neovim elements)
+Lifecycle Management (show/hide/toggle)
 ```
 
 ## Implementation Phases
 
 1. **Phase 1**: Core state management (2-3 weeks)
-2. **Phase 2**: Layout engine (3-4 weeks)
-3. **Phase 3**: Buffer management (2-3 weeks)
+2. **Phase 2**: Registration system (2-3 weeks)
+3. **Phase 3**: Lifecycle management (2-3 weeks)
 4. **Phase 4**: Hook system (1-2 weeks)
-5. **Phase 5**: Advanced features (3-4 weeks)
-6. **Phase 6**: Compatibility layer (1-2 weeks)
+5. **Phase 5**: Window operations (1-2 weeks)
+6. **Phase 6**: Advanced features (2-3 weeks)
 7. **Phase 7**: Polish & optimization (2-3 weeks)
 
-**Total**: ~3.5-5 months
+**Total**: ~2.5-4 months
 
 ## Example Usage
 
@@ -163,9 +161,10 @@ exp:toggle()
 
 ### Design Decisions
 - ✅ Experiences are the primary abstraction (not windows)
-- ✅ Layouts are declarative (not imperative)
+- ✅ Registration is dynamic (not declarative)
 - ✅ Hooks provide extensibility (not inheritance)
 - ✅ State is centralized (not distributed)
+- ✅ Plugins create, Tfling manages
 
 ## File Structure
 

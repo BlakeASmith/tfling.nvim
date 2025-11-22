@@ -44,12 +44,7 @@ This document outlines the implementation plan for Tfling v2, breaking down the 
    - [ ] `tfling.state()` function
    - [ ] `tfling.list()` function
 
-4. **Basic Layout Parsing** (`lua/tfling/v2/layout.lua`)
-   - [ ] Layout structure validation
-   - [ ] Layout normalization
-   - [ ] Simple layout types (float, split, tab)
-
-5. **Tests**
+4. **Tests**
    - [ ] Unit tests for StateManager
    - [ ] Unit tests for Experience lifecycle
    - [ ] Integration tests for basic show/hide
@@ -61,7 +56,7 @@ This document outlines the implementation plan for Tfling v2, breaking down the 
 **Deliverables**:
 - Working state management system
 - Basic experience creation and lifecycle
-- Simple layout support (single float or split)
+- Experience state tracking
 
 ## Phase 2: Registration System (Priority: Critical)
 
@@ -381,18 +376,14 @@ lua/tfling/v2/
 
 1. **Alpha Release**: After Phase 1-2 (core functionality)
 2. **Beta Release**: After Phase 3-4 (complete feature set)
-3. **RC Release**: After Phase 5-6 (advanced features + compatibility)
+3. **RC Release**: After Phase 5-6 (advanced features)
 4. **Stable Release**: After Phase 7 (polish and optimization)
 
 ## Risk Mitigation
 
 ### Technical Risks
 
-1. **Complex Layout Handling**
-   - Mitigation: Start with simple layouts, gradually add complexity
-   - Fallback: Limit nesting depth if needed
-
-2. **Window State Restoration**
+1. **Window State Restoration**
    - Mitigation: Comprehensive testing of window restoration
    - Fallback: Recreate windows if restoration fails
 
@@ -468,10 +459,10 @@ lua/tfling/v2/
 
 ## Design Changes from Original Plan
 
-### Removed Features
-- **Layout Engine**: Removed - plugins handle window creation
-- **Buffer Creation**: Removed - plugins handle buffer creation
-- **v1 Compatibility**: Removed - no compatibility layer needed
+### Design Decisions
+- **No Layout Engine**: Plugins handle window creation
+- **No Buffer Creation**: Plugins handle buffer creation
+- **Registration Model**: Core feature - dynamic registration of UI elements
 
 ### New Focus
 - **Registration Model**: Core feature - dynamic registration of UI elements
