@@ -15,7 +15,7 @@ local defaults = require("tfling.defaults")
 local geometry = require("tfling.geometry")
 
 --- @class TflingWindowOpts
---- @field type? "floating" | "split"
+--- @field type? "floating" | "split" | "tab"
 --- @field position? "top-left" | "top-center" | "top-right" | "bottom-left" | "bottom-right" | "bottom-center" | "left-center" | "right-center" | "center"
 --- @field width? string | number
 --- @field height? string | number
@@ -33,6 +33,7 @@ local geometry = require("tfling.geometry")
 --- @field job_id? number
 --- @field bufnr number
 --- @field win_id number
+--- @field tabpage_id? number
 --- @field name string
 --- @field cmd? string
 --- @field send function(cmd: string)
@@ -125,6 +126,7 @@ function New(config)
 	instance.cmd = config.cmd
 	instance.bufnr = config.bufnr
 	instance.win_id = nil
+	instance.tabpage_id = nil
 	instance.job_id = nil
 	instance.name = config.name
 
@@ -179,7 +181,22 @@ function Terminal:toggle(opts)
 		local win_config = defaults.apply_win_defaults(opts.win)
 		opts.win = win_config
 	end
-	if self.win_id and vim.api.nvim_win_is_valid(self.win_id) then
+	-- Check if this is a tab instance
+	if self.tabpage_id and vim.api.nvim_tabpage_is_valid(self.tabpage_id) then
+		-- For tabs, switch to the tabpage
+		vim.api.nvim_set_current_tabpage(self.tabpage_id)
+		-- Focus the window in the tabpage if it exists
+		if self.win_id and vim.api.nvim_win_is_valid(self.win_id) then
+			vim.api.nvim_set_current_win(self.win_id)
+		end
+		-- Update current_index when focusing existing window
+		for i, name in ipairs(buffer_list) do
+			if name == self.name then
+				current_index = i
+				break
+			end
+		end
+	elseif self.win_id and vim.api.nvim_win_is_valid(self.win_id) then
 		if opts.win.type == "floating" then
 			local final_win_opts = geometry.floating(opts.win)
 			vim.api.nvim_win_set_config(self.win_id, final_win_opts)
@@ -201,6 +218,34 @@ function Terminal:toggle(opts)
 end
 
 function Terminal:hide()
+	-- For tabs, switch back to the previous tabpage instead of closing
+	if self.tabpage_id and vim.api.nvim_tabpage_is_valid(self.tabpage_id) then
+		local current_tabpage = vim.api.nvim_get_current_tabpage()
+		if current_tabpage == self.tabpage_id then
+			-- Switch to the previous tabpage if available
+			local all_tabpages = vim.api.nvim_list_tabpages()
+			for i, tabpage in ipairs(all_tabpages) do
+				if tabpage == self.tabpage_id then
+					-- Switch to the previous tabpage, or next if this is the first
+					if i > 1 then
+						vim.api.nvim_set_current_tabpage(all_tabpages[i - 1])
+					elseif #all_tabpages > 1 then
+						vim.api.nvim_set_current_tabpage(all_tabpages[2])
+					end
+					break
+				end
+			end
+		end
+		-- Note: We don't close the tabpage here, just switch away from it
+		-- The tabpage will remain with the buffer, allowing users to switch back
+		-- Update current_index if this was the current buffer
+		if current_index and buffer_list[current_index] == self.name then
+			current_index = nil
+		end
+		return
+	end
+	
+	-- For floating and split windows, close the window
 	if not (self.win_id and vim.api.nvim_win_is_valid(self.win_id)) then
 		return
 	end
@@ -219,17 +264,35 @@ end
 function Terminal:open(opts)
 	local win_config = defaults.apply_win_defaults(opts.win)
 
-	-- 2. If window is valid, just focus it
-	if self.win_id and vim.api.nvim_win_is_valid(self.win_id) then
-		vim.api.nvim_set_current_win(self.win_id)
-		-- Update current_index
-		for i, name in ipairs(buffer_list) do
-			if name == self.name then
-				current_index = i
-				break
+	-- 2. If window is valid, just focus it (or tabpage for tabs)
+	if win_config.type == "tab" then
+		if self.tabpage_id and vim.api.nvim_tabpage_is_valid(self.tabpage_id) then
+			vim.api.nvim_set_current_tabpage(self.tabpage_id)
+			-- Focus the window in the tabpage if it exists
+			if self.win_id and vim.api.nvim_win_is_valid(self.win_id) then
+				vim.api.nvim_set_current_win(self.win_id)
 			end
+			-- Update current_index
+			for i, name in ipairs(buffer_list) do
+				if name == self.name then
+					current_index = i
+					break
+				end
+			end
+			return
 		end
-		return
+	else
+		if self.win_id and vim.api.nvim_win_is_valid(self.win_id) then
+			vim.api.nvim_set_current_win(self.win_id)
+			-- Update current_index
+			for i, name in ipairs(buffer_list) do
+				if name == self.name then
+					current_index = i
+					break
+				end
+			end
+			return
+		end
 	end
 
 	-- 3. If buffer exists, create window based on type
@@ -237,6 +300,8 @@ function Terminal:open(opts)
 		if win_config.type == "floating" then
 			local final_win_opts = geometry.floating(win_config)
 			self.win_id = vim.api.nvim_open_win(self.bufnr, true, final_win_opts)
+		elseif win_config.type == "tab" then
+			self:_create_tab_window(win_config)
 		else
 			self:_create_split_window(win_config)
 		end
@@ -256,6 +321,8 @@ function Terminal:open(opts)
 	if win_config.type == "floating" then
 		local final_win_opts = geometry.floating(win_config)
 		self.win_id = vim.api.nvim_open_win(self.bufnr, true, final_win_opts)
+	elseif win_config.type == "tab" then
+		self:_create_tab_window(win_config)
 	else
 		self:_create_split_window(win_config)
 	end
@@ -317,6 +384,56 @@ function Terminal:_create_split_window(win_config)
 
 	-- Set the buffer to the terminal buffer
 	vim.api.nvim_win_set_buf(self.win_id, self.bufnr)
+end
+
+function Terminal:_create_tab_window(win_config)
+	-- Create a new tabpage or reuse existing one
+	if self.tabpage_id and vim.api.nvim_tabpage_is_valid(self.tabpage_id) then
+		-- Tabpage already exists, switch to it
+		vim.api.nvim_set_current_tabpage(self.tabpage_id)
+	else
+		-- Create a new tabpage
+		vim.cmd("tabnew")
+		self.tabpage_id = vim.api.nvim_get_current_tabpage()
+	end
+
+	-- Get the current window ID in the tabpage
+	self.win_id = vim.api.nvim_get_current_win()
+
+	-- Set the buffer to the terminal buffer
+	vim.api.nvim_win_set_buf(self.win_id, self.bufnr)
+
+	-- If direction and size are specified, create splits within the tab
+	-- This allows tabs to have splits inside them
+	if win_config.direction and win_config.size then
+		local size_str = win_config.size
+		local size_percent = tonumber((size_str:gsub("%%", "")))
+		local actual_size
+
+		if win_config.direction == "top" or win_config.direction == "bottom" then
+			-- Horizontal split - calculate percentage of total lines
+			actual_size = math.floor(vim.o.lines * (size_percent / 100))
+			if win_config.direction == "top" then
+				vim.cmd("topleft split")
+			else
+				vim.cmd("botright split")
+			end
+			vim.cmd("resize " .. actual_size)
+		elseif win_config.direction == "left" or win_config.direction == "right" then
+			-- Vertical split - calculate percentage of total columns
+			actual_size = math.floor(vim.o.columns * (size_percent / 100))
+			if win_config.direction == "left" then
+				vim.cmd("topleft vsplit")
+			else
+				vim.cmd("botright vsplit")
+			end
+			vim.cmd("vertical resize " .. actual_size)
+		end
+
+		-- Update window ID to the newly created split window
+		self.win_id = vim.api.nvim_get_current_win()
+		vim.api.nvim_win_set_buf(self.win_id, self.bufnr)
+	end
 end
 
 function Terminal:setup_win_options(win_config)
@@ -991,8 +1108,17 @@ vim.api.nvim_create_user_command("TflingNext", function()
 	-- Hide current buffer if found
 	if valid_index then
 		local current_instance = terms[current_name]
-		if current_instance and current_instance.win_id and vim.api.nvim_win_is_valid(current_instance.win_id) then
-			current_instance:hide()
+		if current_instance then
+			-- Check if it's a tab or a regular window
+			local should_hide = false
+			if current_instance.tabpage_id and vim.api.nvim_tabpage_is_valid(current_instance.tabpage_id) then
+				should_hide = true
+			elseif current_instance.win_id and vim.api.nvim_win_is_valid(current_instance.win_id) then
+				should_hide = true
+			end
+			if should_hide then
+				current_instance:hide()
+			end
 		end
 		-- Move to next (wrap around)
 		valid_index = (valid_index % #valid_names) + 1
@@ -1054,8 +1180,17 @@ vim.api.nvim_create_user_command("TflingPrev", function()
 	-- Hide current buffer if found
 	if valid_index then
 		local current_instance = terms[current_name]
-		if current_instance and current_instance.win_id and vim.api.nvim_win_is_valid(current_instance.win_id) then
-			current_instance:hide()
+		if current_instance then
+			-- Check if it's a tab or a regular window
+			local should_hide = false
+			if current_instance.tabpage_id and vim.api.nvim_tabpage_is_valid(current_instance.tabpage_id) then
+				should_hide = true
+			elseif current_instance.win_id and vim.api.nvim_win_is_valid(current_instance.win_id) then
+				should_hide = true
+			end
+			if should_hide then
+				current_instance:hide()
+			end
 		end
 		-- Move to previous (wrap around)
 		valid_index = valid_index - 1
@@ -1111,10 +1246,18 @@ vim.api.nvim_create_user_command("TflingToggleCurrent", function()
 	end
 	
 	-- Toggle: hide if visible, show if hidden
-	if current_instance.win_id and vim.api.nvim_win_is_valid(current_instance.win_id) then
+	local is_visible = false
+	if current_instance.tabpage_id and vim.api.nvim_tabpage_is_valid(current_instance.tabpage_id) then
+		is_visible = true
+	elseif current_instance.win_id and vim.api.nvim_win_is_valid(current_instance.win_id) then
+		is_visible = true
+	end
+	
+	if is_visible then
 		current_instance:hide()
 	else
 		-- Show the buffer with default floating window config
+		-- Note: If it was originally a tab, toggle() will switch to the existing tabpage
 		local win_config = defaults.apply_win_defaults({
 			type = "floating",
 		})
