@@ -271,6 +271,7 @@ local terms = {}
 
 --- @class termTerm
 --- @field name? string the name (needs to be unique, defaults to cmd)
+--- @field key? string optional key/shortcut identifier to append to the default name
 --- @field cmd string the command/program to run
 --- @field tmux? boolean whether to use tmux for this terminal (defaults to false)
 --- @field abduco? boolean whether to use abduco for this terminal (defaults to false)
@@ -295,6 +296,9 @@ function M.term(opts)
 	-- Set default name to cmd if not provided
 	if opts.name == nil then
 		opts.name = opts.cmd
+		if opts.key then
+			opts.name = opts.name .. "-" .. opts.key
+		end
 	end
 
 	-- Handle tmux-backed terminals
