@@ -15,7 +15,7 @@ local defaults = require("tfling.defaults")
 local geometry = require("tfling.geometry")
 
 --- @class TflingWindowOpts
---- @field type? "floating" | "split" | "tab"
+--- @field type? "floating" | "split"
 --- @field position? "top-left" | "top-center" | "top-right" | "bottom-left" | "bottom-right" | "bottom-center" | "left-center" | "right-center" | "center"
 --- @field width? string | number
 --- @field height? string | number
@@ -264,35 +264,17 @@ end
 function Terminal:open(opts)
 	local win_config = defaults.apply_win_defaults(opts.win)
 
-	-- 2. If window is valid, just focus it (or tabpage for tabs)
-	if win_config.type == "tab" then
-		if self.tabpage_id and vim.api.nvim_tabpage_is_valid(self.tabpage_id) then
-			vim.api.nvim_set_current_tabpage(self.tabpage_id)
-			-- Focus the window in the tabpage if it exists
-			if self.win_id and vim.api.nvim_win_is_valid(self.win_id) then
-				vim.api.nvim_set_current_win(self.win_id)
+	-- 2. If window is valid, just focus it
+	if self.win_id and vim.api.nvim_win_is_valid(self.win_id) then
+		vim.api.nvim_set_current_win(self.win_id)
+		-- Update current_index
+		for i, name in ipairs(buffer_list) do
+			if name == self.name then
+				current_index = i
+				break
 			end
-			-- Update current_index
-			for i, name in ipairs(buffer_list) do
-				if name == self.name then
-					current_index = i
-					break
-				end
-			end
-			return
 		end
-	else
-		if self.win_id and vim.api.nvim_win_is_valid(self.win_id) then
-			vim.api.nvim_set_current_win(self.win_id)
-			-- Update current_index
-			for i, name in ipairs(buffer_list) do
-				if name == self.name then
-					current_index = i
-					break
-				end
-			end
-			return
-		end
+		return
 	end
 
 	-- 3. If buffer exists, create window based on type
@@ -300,8 +282,6 @@ function Terminal:open(opts)
 		if win_config.type == "floating" then
 			local final_win_opts = geometry.floating(win_config)
 			self.win_id = vim.api.nvim_open_win(self.bufnr, true, final_win_opts)
-		elseif win_config.type == "tab" then
-			self:_create_tab_window(win_config)
 		else
 			self:_create_split_window(win_config)
 		end
@@ -321,8 +301,6 @@ function Terminal:open(opts)
 	if win_config.type == "floating" then
 		local final_win_opts = geometry.floating(win_config)
 		self.win_id = vim.api.nvim_open_win(self.bufnr, true, final_win_opts)
-	elseif win_config.type == "tab" then
-		self:_create_tab_window(win_config)
 	else
 		self:_create_split_window(win_config)
 	end
@@ -386,16 +364,35 @@ function Terminal:_create_split_window(win_config)
 	vim.api.nvim_win_set_buf(self.win_id, self.bufnr)
 end
 
-function Terminal:_create_tab_window(win_config)
-	-- Create a new tabpage or reuse existing one
+function Terminal:open_tab(opts)
+	-- Check if tabpage already exists and is valid
 	if self.tabpage_id and vim.api.nvim_tabpage_is_valid(self.tabpage_id) then
 		-- Tabpage already exists, switch to it
 		vim.api.nvim_set_current_tabpage(self.tabpage_id)
-	else
-		-- Create a new tabpage
-		vim.cmd("tabnew")
-		self.tabpage_id = vim.api.nvim_get_current_tabpage()
+		-- Focus the window in the tabpage if it exists
+		if self.win_id and vim.api.nvim_win_is_valid(self.win_id) then
+			vim.api.nvim_set_current_win(self.win_id)
+		end
+		-- Update current_index
+		for i, name in ipairs(buffer_list) do
+			if name == self.name then
+				current_index = i
+				break
+			end
+		end
+		return
 	end
+
+	-- Create buffer if it doesn't exist
+	if not self.bufnr or not vim.api.nvim_buf_is_valid(self.bufnr) then
+		self.bufnr = vim.api.nvim_create_buf(true, true)
+		vim.bo[self.bufnr].bufhidden = "hide"
+		vim.bo[self.bufnr].filetype = "tfling"
+	end
+
+	-- Create a new tabpage
+	vim.cmd("tabnew")
+	self.tabpage_id = vim.api.nvim_get_current_tabpage()
 
 	-- Get the current window ID in the tabpage
 	self.win_id = vim.api.nvim_get_current_win()
@@ -403,26 +400,29 @@ function Terminal:_create_tab_window(win_config)
 	-- Set the buffer to the terminal buffer
 	vim.api.nvim_win_set_buf(self.win_id, self.bufnr)
 
+	active_instances[self.win_id] = self
+	self:setup_win_options({})
+
 	-- If direction and size are specified, create splits within the tab
 	-- This allows tabs to have splits inside them
-	if win_config.direction and win_config.size then
-		local size_str = win_config.size
+	if opts and opts.direction and opts.size then
+		local size_str = opts.size
 		local size_percent = tonumber((size_str:gsub("%%", "")))
 		local actual_size
 
-		if win_config.direction == "top" or win_config.direction == "bottom" then
+		if opts.direction == "top" or opts.direction == "bottom" then
 			-- Horizontal split - calculate percentage of total lines
 			actual_size = math.floor(vim.o.lines * (size_percent / 100))
-			if win_config.direction == "top" then
+			if opts.direction == "top" then
 				vim.cmd("topleft split")
 			else
 				vim.cmd("botright split")
 			end
 			vim.cmd("resize " .. actual_size)
-		elseif win_config.direction == "left" or win_config.direction == "right" then
+		elseif opts.direction == "left" or opts.direction == "right" then
 			-- Vertical split - calculate percentage of total columns
 			actual_size = math.floor(vim.o.columns * (size_percent / 100))
-			if win_config.direction == "left" then
+			if opts.direction == "left" then
 				vim.cmd("topleft vsplit")
 			else
 				vim.cmd("botright vsplit")
@@ -433,6 +433,36 @@ function Terminal:_create_tab_window(win_config)
 		-- Update window ID to the newly created split window
 		self.win_id = vim.api.nvim_get_current_win()
 		vim.api.nvim_win_set_buf(self.win_id, self.bufnr)
+		active_instances[self.win_id] = self
+	end
+
+	-- Update current_index when opening a tab
+	for i, name in ipairs(buffer_list) do
+		if name == self.name then
+			current_index = i
+			break
+		end
+	end
+
+	if self.cmd then
+		vim.cmd("startinsert")
+	end
+
+	if self.init then
+		vim.api.nvim_win_call(self.win_id, function()
+			local init_type = type(self.init)
+			if init_type == "string" then
+				vim.cmd(self.init)
+				return
+			end
+
+			if init_type == "function" then
+				self.init(self)
+				return
+			end
+
+			vim.notify("tfling: 'init' must be a string or function", vim.log.levels.ERROR)
+		end)
 	end
 end
 
@@ -778,6 +808,132 @@ function M.buff(opts)
 	return create_tfling(opts)
 end
 
+--- @class TflingTabOpts
+--- @field name? string
+--- @field cmd? string
+--- @field init? string | fun(term: TflingInstance)
+--- @field bufnr? number
+--- @field direction? "top" | "bottom" | "left" | "right"
+--- @field size? string | number
+--- @field tmux? boolean
+--- @field abduco? boolean
+--- @field setup? fun(term: TflingInstance)
+--- @field send_delay? number
+
+--- @param opts TflingTabOpts
+local function create_tfling_tab(opts)
+	if opts.setup == nil then
+		opts.setup = function() end
+	end
+
+	-- Set default name to cmd or init if not provided
+	if opts.name == nil then
+		local source = opts.cmd or (type(opts.init) == "string" and opts.init)
+		if source then
+			opts.name = source
+		else
+			vim.notify("tfling.tab: 'name', 'cmd' or 'init' is required", vim.log.levels.ERROR)
+			return
+		end
+	end
+
+	-- Capture selected text BEFORE any buffer operations
+	local captured_selected_text = get_selected_text()
+
+	if terms[opts.name] == nil then
+		terms[opts.name] = New({
+			cmd = opts.cmd,
+			bufnr = opts.bufnr,
+			name = opts.name,
+			init = opts.init,
+			tmux = opts.tmux,
+			abduco = opts.abduco,
+		})
+		-- Add to buffer_list if it's a new instance
+		table.insert(buffer_list, opts.name)
+	end
+
+	-- Prepare tab options (direction and size for splits within tab)
+	local tab_opts = {}
+	if opts.direction then
+		tab_opts.direction = opts.direction
+	end
+	if opts.size then
+		tab_opts.size = opts.size
+	end
+
+	-- Open the tab
+	terms[opts.name]:open_tab(tab_opts)
+
+	-- call setup function in autocommand
+	local augroup_name = "tfling." .. opts.name .. ".config"
+	vim.api.nvim_create_augroup(augroup_name, {
+		-- reset each time we enter
+		clear = true,
+	})
+
+	local function on_enter()
+		-- Create a table with terminal details to pass to the callback
+		local term_instance_ref = terms[opts.name]
+		
+		--- @type TflingInstance
+		local term_details = {
+			job_id = term_instance_ref.job_id,
+			bufnr = term_instance_ref.bufnr,
+			win_id = term_instance_ref.win_id,
+			name = opts.name,
+			cmd = opts.cmd,
+			selected_text = captured_selected_text, -- Use the captured text
+			-- Helper function to send commands to this terminal
+			send = function(command)
+				local instance = terms[opts.name]
+				if instance and instance.job_id then
+					-- Use per-terminal send_delay if provided, otherwise fall back to global config
+					local delay = opts.send_delay or Config.send_delay or 100
+					vim.defer_fn(function()
+						vim.api.nvim_chan_send(instance.job_id, command)
+					end, delay)
+				end
+			end,
+			-- Helper function to resize the terminal window
+			win = {
+				resize = function(options)
+					local instance = terms[opts.name]
+					if instance then
+						instance:resize(options)
+					end
+				end,
+				reposition = function(options)
+					local instance = terms[opts.name]
+					if instance then
+						instance:reposition(options)
+					end
+				end,
+			},
+		}
+		Config.always(term_details)
+		opts.setup(term_details)
+	end
+
+	-- on buffer enter (works for both terminal and non-terminal buffers)
+	vim.api.nvim_create_autocmd("BufEnter", {
+		group = augroup_name,
+		-- only apply in the buffer created for this program
+		buffer = terms[opts.name].bufnr,
+		callback = on_enter,
+	})
+
+	-- Run immediately if we are already in the buffer (since the first BufEnter happened during open_tab)
+	if vim.api.nvim_get_current_buf() == terms[opts.name].bufnr then
+		on_enter()
+	end
+end
+
+--- @param opts TflingTabOpts
+function M.tab(opts)
+	return create_tfling_tab(opts)
+end
+
 Config = {
 	always = function(term) end,
 	send_delay = 100, -- Default delay in milliseconds
@@ -980,7 +1136,9 @@ vim.api.nvim_create_user_command("TFlingListBuffers", function()
 	for name, instance in pairs(terms) do
 		if instance.bufnr and vim.api.nvim_buf_is_valid(instance.bufnr) then
 			local is_open = false
-			if instance.win_id and vim.api.nvim_win_is_valid(instance.win_id) then
+			if instance.tabpage_id and vim.api.nvim_tabpage_is_valid(instance.tabpage_id) then
+				is_open = true
+			elseif instance.win_id and vim.api.nvim_win_is_valid(instance.win_id) then
 				is_open = true
 			end
 			table.insert(open_buffers, {

@@ -20,10 +20,6 @@ HorizontalSplitDefaults = {
 	direction = "bottom",
 }
 
-TabDefaults = {
-	type = "tab",
-}
-
 function ApplyDefaults(tbl, defaults)
 	local applied = {}
 	for key, value in pairs(tbl) do
@@ -45,7 +41,7 @@ end
 
 ---
 -- Sets default win config
---- @param opts termSplitWin | termFloatingWin | termTabWin
+--- @param opts termSplitWin | termFloatingWin
 function M.apply_win_defaults(opts)
 	if opts.type == "floating" then
 		opts = ApplyDefaults(opts, FloatingDefaults)
@@ -55,8 +51,6 @@ function M.apply_win_defaults(opts)
 		else
 			opts = ApplyDefaults(opts, HorizontalSplitDefaults)
 		end
-	elseif opts.type == "tab" then
-		opts = ApplyDefaults(opts, TabDefaults)
 	else
 		return ApplyDefaults(opts, FloatingDefaults)
 	end
