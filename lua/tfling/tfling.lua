@@ -77,8 +77,8 @@ function Terminal:_calculate_floating_geometry(win_config)
 end
 
 function New(config)
-	if not config.cmd and not config.bufnr and not config.name then
-		vim.notify("FloatingTerm:new() requires 'cmd', 'bufnr', or 'name'", vim.log.levels.ERROR)
+	if not config.cmd and not config.bufnr and not config.name and not config.init then
+		vim.notify("FloatingTerm:new() requires 'cmd', 'bufnr', 'name' or 'init'", vim.log.levels.ERROR)
 		return
 	end
 
@@ -88,6 +88,24 @@ function New(config)
 	instance.bufnr = config.bufnr
 	instance.win_id = nil
 	instance.job_id = nil
+
+	if config.cmd then
+		instance.init = function(term)
+			local on_exit = vim.schedule_wrap(function()
+				if active_instances[term.win_id] then
+					active_instances[term.win_id] = nil
+				end
+				term.bufnr = nil
+				term.win_id = nil
+				term.job_id = nil
+			end)
+			term.job_id = vim.fn.termopen(term.cmd, { on_exit = on_exit })
+			vim.cmd("startinsert")
+		end
+	elseif config.init then
+		instance.init = config.init
+	end
+
 	return instance
 end
 
@@ -164,19 +182,13 @@ function Terminal:open(opts)
 	active_instances[self.win_id] = self
 	self:setup_win_options()
 
-	local on_exit = vim.schedule_wrap(function()
-		if active_instances[self.win_id] then
-			active_instances[self.win_id] = nil
-		end
-		self.bufnr = nil
-		self.win_id = nil
-		self.job_id = nil
-	end)
-
-	if self.cmd then
+	if self.init then
 		vim.api.nvim_win_call(self.win_id, function()
-			self.job_id = vim.fn.termopen(self.cmd, { on_exit = on_exit })
-			vim.cmd("startinsert")
+			if type(self.init) == "string" then
+				vim.cmd(self.init)
+			elseif type(self.init) == "function" then
+				self.init(self)
+			end
 		end)
 	end
 end
@@ -296,6 +308,8 @@ function M.term(opts)
 	if opts.name == nil then
 		if opts.cmd then
 			opts.name = opts.cmd
+		elseif opts.init and type(opts.init) == "string" then
+			opts.name = opts.init
 		else
 			vim.notify("tfling: 'name' or 'cmd' is required", vim.log.levels.ERROR)
 			return
@@ -329,6 +343,7 @@ function M.term(opts)
 			cmd = actual_cmd,
 			bufnr = opts.bufnr,
 			name = opts.name,
+			init = opts.init,
 			win_opts = {}, -- Legacy support
 		})
 	end
