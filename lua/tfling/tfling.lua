@@ -84,6 +84,7 @@ function New(config)
 
 	local instance = setmetatable({}, Terminal)
 	instance.cmd = config.cmd
+	instance.name = config.name
 	instance.win_opts = config.win_opts or {} -- Legacy support
 	instance.bufnr = nil
 	instance.win_id = nil
@@ -173,6 +174,9 @@ function Terminal:open(opts)
 
 	vim.api.nvim_win_call(self.win_id, function()
 		self.job_id = vim.fn.termopen(self.cmd, { on_exit = on_exit })
+		if self.name then
+			pcall(vim.api.nvim_buf_set_name, self.bufnr, "tfling://" .. self.name)
+		end
 		vim.cmd("startinsert")
 	end)
 end
@@ -316,6 +320,7 @@ function M.term(opts)
 	if terms[opts.name] == nil then
 		terms[opts.name] = New({
 			cmd = actual_cmd,
+			name = opts.name,
 			win_opts = {}, -- Legacy support
 		})
 	end
