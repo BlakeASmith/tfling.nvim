@@ -1,15 +1,54 @@
--- File: lua/floating_term.lua
+-- File: lua/tfling/tfling.lua
 
 local M = {}
 
 local Terminal = {}
 Terminal.__index = Terminal
 local active_instances = {}
+local terms = {}
 
 local util = require("tfling.util")
 local get_selected_text = util.get_selected_text
 local defaults = require("tfling.defaults")
 local geometry = require("tfling.geometry")
+
+--- @class TflingWindowOpts
+--- @field type? "floating" | "split"
+--- @field position? "top-left" | "top-center" | "top-right" | "bottom-left" | "bottom-right" | "bottom-center" | "left-center" | "right-center" | "center"
+--- @field width? string | number
+--- @field height? string | number
+--- @field margin? string | number
+--- @field direction? "top" | "bottom" | "left" | "right"
+--- @field size? string | number
+--- @field row? number|string
+--- @field col? number|string
+
+--- @class TflingWindowOperations
+--- @field resize fun(options: TflingWindowOpts)
+--- @field reposition fun(options: TflingWindowOpts)
+
+--- @class TflingInstance
+--- @field job_id? number
+--- @field bufnr number
+--- @field win_id number
+--- @field name string
+--- @field cmd? string
+--- @field send function(cmd: string)
+--- @field win TflingWindowOperations
+--- @field selected_text? string
+
+--- @class TflingOpts
+--- @field name? string
+--- @field cmd? string
+--- @field init? string | fun(term: TflingInstance)
+--- @field bufnr? number
+--- @field win? TflingWindowOpts
+--- @field tmux? boolean
+--- @field abduco? boolean
+--- @field setup? fun(term: TflingInstance)
+--- @field send_delay? number
+--- @field width? string|number (deprecated)
+--- @field height? string|number (deprecated)
 
 ---
 -- Internal helper to calculate pixel geometry for floating windows.
@@ -96,7 +135,7 @@ function New(config)
 			local cmd_table = vim.split(config.cmd, " ")
 			local session_name = "tfling-" .. (config.name or config.cmd)
 			local sessions = require("tfling.sessions")
-			
+
 			local provider = nil
 			if config.tmux then
 				provider = sessions.tmux
@@ -264,6 +303,214 @@ function Terminal:setup_win_options()
 	vim.wo[win_id].signcolumn = "no"
 end
 
+function Terminal:resize(options)
+	if not (self.win_id and vim.api.nvim_win_is_valid(self.win_id)) then
+		return
+	end
+
+	local win_id = self.win_id
+	local current_config = vim.api.nvim_win_get_config(win_id)
+
+	-- Handle floating windows
+	if current_config.relative == "editor" then
+		local new_config = vim.tbl_deep_extend("force", {}, current_config)
+
+		if options.width then
+			if type(options.width) == "string" then
+				if options.width:match("^%+%d+%%$") then
+					-- Relative increase: "+5%"
+					local percent = tonumber(options.width:match("%d+"))
+					new_config.width = current_config.width
+						+ math.floor(current_config.width * percent / 100)
+				elseif options.width:match("^%d+%%$") then
+					-- Absolute percentage: "50%"
+					local percent = tonumber(options.width:match("%d+"))
+					new_config.width = math.floor(vim.o.columns * percent / 100)
+				else
+					-- Absolute value
+					new_config.width = tonumber(options.width)
+				end
+			else
+				new_config.width = options.width
+			end
+		end
+
+		if options.height then
+			if type(options.height) == "string" then
+				if options.height:match("^%+%d+%%$") then
+					-- Relative increase: "+5%"
+					local percent = tonumber(options.height:match("%d+"))
+					new_config.height = current_config.height
+						+ math.floor(current_config.height * percent / 100)
+				elseif options.height:match("^%d+%%$") then
+					-- Absolute percentage: "50%"
+					local percent = tonumber(options.height:match("%d+"))
+					new_config.height = math.floor(vim.o.lines * percent / 100)
+				else
+					-- Absolute value
+					new_config.height = tonumber(options.height)
+				end
+			else
+				new_config.height = options.height
+			end
+		end
+
+		-- Ensure window stays within screen bounds
+		new_config.width = math.min(new_config.width, vim.o.columns - 2)
+		new_config.height = math.min(new_config.height, vim.o.lines - 2)
+
+		vim.api.nvim_win_set_config(win_id, new_config)
+
+	-- Handle split windows
+	else
+		if options.height then
+			local new_height
+			if type(options.height) == "string" then
+				if options.height:match("^%+%d+%%$") then
+					-- Relative increase: "+5%"
+					local percent = tonumber(options.height:match("%d+"))
+					local current_height = vim.api.nvim_win_get_height(win_id)
+					new_height = current_height + math.floor(current_height * percent / 100)
+				elseif options.height:match("^%d+%%$") then
+					-- Absolute percentage: "50%"
+					local percent = tonumber(options.height:match("%d+"))
+					new_height = math.floor(vim.o.lines * percent / 100)
+				else
+					-- Absolute value
+					new_height = tonumber(options.height)
+				end
+			else
+				new_height = options.height
+			end
+			vim.api.nvim_win_set_height(win_id, new_height)
+		end
+
+		if options.width then
+			local new_width
+			if type(options.width) == "string" then
+				if options.width:match("^%+%d+%%$") then
+					-- Relative increase: "+5%"
+					local percent = tonumber(options.width:match("%d+"))
+					local current_width = vim.api.nvim_win_get_width(win_id)
+					new_width = current_width + math.floor(current_width * percent / 100)
+				elseif options.width:match("^%d+%%$") then
+					-- Absolute percentage: "50%"
+					local percent = tonumber(options.width:match("%d+"))
+					new_width = math.floor(vim.o.columns * percent / 100)
+				else
+					-- Absolute value
+					new_width = tonumber(options.width)
+				end
+			else
+				new_width = options.width
+			end
+			vim.api.nvim_win_set_width(win_id, new_width)
+		end
+	end
+end
+
+function Terminal:reposition(options)
+	if not (self.win_id and vim.api.nvim_win_is_valid(self.win_id)) then
+		return
+	end
+
+	local win_id = self.win_id
+	local current_config = vim.api.nvim_win_get_config(win_id)
+
+	-- Handle floating windows
+	if current_config.relative == "editor" then
+		local new_config = vim.tbl_deep_extend("force", {}, current_config)
+
+		-- Handle position-based repositioning
+		if options.position then
+			local win_config = {
+				type = "floating",
+				position = options.position,
+				width = tostring(math.floor(current_config.width * 100 / vim.o.columns)) .. "%",
+				height = tostring(math.floor(current_config.height * 100 / vim.o.lines)) .. "%",
+				margin = "2%",
+			}
+			local final_win_opts = self:_calculate_floating_geometry(win_config)
+			new_config.row = final_win_opts.row
+			new_config.col = final_win_opts.col
+		end
+
+		-- Handle row-based repositioning
+		if options.row then
+			if type(options.row) == "string" then
+				if options.row:match("^%+%d+$") then
+					-- Relative increase: "+10"
+					local offset = tonumber(options.row:match("%d+"))
+					new_config.row = current_config.row + offset
+				elseif options.row:match("^%d+%%$") then
+					-- Absolute percentage: "50%"
+					local percent = tonumber(options.row:match("%d+"))
+					new_config.row = math.floor(vim.o.lines * percent / 100)
+				else
+					-- Absolute value
+					new_config.row = tonumber(options.row)
+				end
+			else
+				new_config.row = options.row
+			end
+		end
+
+		-- Handle column-based repositioning
+		if options.col then
+			if type(options.col) == "string" then
+				if options.col:match("^%+%d+$") then
+					-- Relative increase: "+10"
+					local offset = tonumber(options.col:match("%d+"))
+					new_config.col = current_config.col + offset
+				elseif options.col:match("^%d+%%$") then
+					-- Absolute percentage: "50%"
+					local percent = tonumber(options.col:match("%d+"))
+					new_config.col = math.floor(vim.o.columns * percent / 100)
+				else
+					-- Absolute value
+					new_config.col = tonumber(options.col)
+				end
+			else
+				new_config.col = options.col
+			end
+		end
+
+		-- Ensure window stays within screen bounds
+		new_config.row = math.max(0, math.min(new_config.row, vim.o.lines - new_config.height))
+		new_config.col = math.max(0, math.min(new_config.col, vim.o.columns - new_config.width))
+
+		vim.api.nvim_win_set_config(win_id, new_config)
+
+	-- Handle split windows
+	else
+		if options.direction then
+			-- For split windows, we need to recreate the window in the new direction
+			local current_height = vim.api.nvim_win_get_height(win_id)
+			local current_width = vim.api.nvim_win_get_width(win_id)
+			local size_percent
+
+			if options.direction == "top" or options.direction == "bottom" then
+				size_percent = math.floor(current_height * 100 / vim.o.lines)
+			else
+				size_percent = math.floor(current_width * 100 / vim.o.columns)
+			end
+
+			-- Close current window
+			vim.api.nvim_win_close(win_id, true)
+
+			-- Create new split in the specified direction
+			local win_config = {
+				type = "split",
+				direction = options.direction,
+				size = tostring(size_percent) .. "%",
+			}
+			self:_create_split_window(win_config)
+			vim.api.nvim_win_set_buf(self.win_id, self.bufnr)
+			self:setup_win_options()
+		end
+	end
+end
+
 function M.hide_current()
 	local current_win = vim.api.nvim_get_current_win()
 	local term_instance = active_instances[current_win]
@@ -272,47 +519,7 @@ function M.hide_current()
 	end
 end
 
-local terms = {}
-
---- @class TflingWinConfig
---- @field type? "floating" | "split"
---- @field position? "top-left" | "top-center" | "top-right" | "bottom-left" | "bottom-right" | "bottom-center" | "left-center" | "right-center" | "center"
---- @field width? string | number
---- @field height? string | number
---- @field margin? string | number
---- @field direction? "top" | "bottom" | "left" | "right"
---- @field size? string | number
---- @field row? number|string
---- @field col? number|string
-
---- @class TflingWindowOps
---- @field resize fun(options: TflingWinConfig)
---- @field reposition fun(options: TflingWinConfig)
-
---- @class TflingDetails
---- @field job_id? number
---- @field bufnr number
---- @field win_id number
---- @field name string
---- @field cmd? string
---- @field send function
---- @field win TflingWindowOps
---- @field selected_text? string
-
---- @class TflingOptions
---- @field name? string
---- @field cmd? string
---- @field init? string | fun(term: TflingDetails)
---- @field bufnr? number
---- @field win? TflingWinConfig
---- @field tmux? boolean
---- @field abduco? boolean
---- @field setup? fun(term: TflingDetails)
---- @field send_delay? number
---- @field width? string|number (deprecated)
---- @field height? string|number (deprecated)
-
---- @param opts TflingOptions
+--- @param opts TflingOpts
 local function create_tfling(opts)
 	if opts.setup == nil then
 		opts.setup = function() end
@@ -322,6 +529,14 @@ local function create_tfling(opts)
 		opts.win = {
 			type = "floating",
 		}
+	end
+
+	-- Handle deprecated top-level width/height
+	if opts.width and not opts.win.width then
+		opts.win.width = opts.width
+	end
+	if opts.height and not opts.win.height then
+		opts.win.height = opts.height
 	end
 
 	-- Set default name to cmd or init if not provided
@@ -363,232 +578,39 @@ local function create_tfling(opts)
 
 	local function on_enter()
 			-- Create a table with terminal details to pass to the callback
+			local term_instance_ref = terms[opts.name]
+			
+			--- @type TflingInstance
 			local term_details = {
-				job_id = terms[opts.name].job_id,
-				bufnr = terms[opts.name].bufnr,
-				win_id = terms[opts.name].win_id,
+				job_id = term_instance_ref.job_id,
+				bufnr = term_instance_ref.bufnr,
+				win_id = term_instance_ref.win_id,
 				name = opts.name,
 				cmd = opts.cmd,
 				selected_text = captured_selected_text, -- Use the captured text
 				-- Helper function to send commands to this terminal
 				send = function(command)
-					local term_instance = terms[opts.name]
-					if term_instance and term_instance.job_id then
+					local instance = terms[opts.name]
+					if instance and instance.job_id then
 						-- Use per-terminal send_delay if provided, otherwise fall back to global config
 						local delay = opts.send_delay or Config.send_delay or 100
 						vim.defer_fn(function()
-							vim.api.nvim_chan_send(term_instance.job_id, command)
+							vim.api.nvim_chan_send(instance.job_id, command)
 						end, delay)
 					end
 				end,
 				-- Helper function to resize the terminal window
 				win = {
 					resize = function(options)
-						local term_instance = terms[opts.name]
-						if not term_instance or not term_instance.win_id then
-							return
-						end
-
-						local win_id = term_instance.win_id
-						local current_config = vim.api.nvim_win_get_config(win_id)
-
-						-- Handle floating windows
-						if current_config.relative == "editor" then
-							local new_config = vim.tbl_deep_extend("force", {}, current_config)
-
-							if options.width then
-								if type(options.width) == "string" then
-									if options.width:match("^%+%d+%%$") then
-										-- Relative increase: "+5%"
-										local percent = tonumber(options.width:match("%d+"))
-										new_config.width = current_config.width
-											+ math.floor(current_config.width * percent / 100)
-									elseif options.width:match("^%d+%%$") then
-										-- Absolute percentage: "50%"
-										local percent = tonumber(options.width:match("%d+"))
-										new_config.width = math.floor(vim.o.columns * percent / 100)
-									else
-										-- Absolute value
-										new_config.width = tonumber(options.width)
-									end
-								else
-									new_config.width = options.width
-								end
-							end
-
-							if options.height then
-								if type(options.height) == "string" then
-									if options.height:match("^%+%d+%%$") then
-										-- Relative increase: "+5%"
-										local percent = tonumber(options.height:match("%d+"))
-										new_config.height = current_config.height
-											+ math.floor(current_config.height * percent / 100)
-									elseif options.height:match("^%d+%%$") then
-										-- Absolute percentage: "50%"
-										local percent = tonumber(options.height:match("%d+"))
-										new_config.height = math.floor(vim.o.lines * percent / 100)
-									else
-										-- Absolute value
-										new_config.height = tonumber(options.height)
-									end
-								else
-									new_config.height = options.height
-								end
-							end
-
-							-- Ensure window stays within screen bounds
-							new_config.width = math.min(new_config.width, vim.o.columns - 2)
-							new_config.height = math.min(new_config.height, vim.o.lines - 2)
-
-							vim.api.nvim_win_set_config(win_id, new_config)
-
-						-- Handle split windows
-						else
-							if options.height then
-								local new_height
-								if type(options.height) == "string" then
-									if options.height:match("^%+%d+%%$") then
-										-- Relative increase: "+5%"
-										local percent = tonumber(options.height:match("%d+"))
-										local current_height = vim.api.nvim_win_get_height(win_id)
-										new_height = current_height + math.floor(current_height * percent / 100)
-									elseif options.height:match("^%d+%%$") then
-										-- Absolute percentage: "50%"
-										local percent = tonumber(options.height:match("%d+"))
-										new_height = math.floor(vim.o.lines * percent / 100)
-									else
-										-- Absolute value
-										new_height = tonumber(options.height)
-									end
-								else
-									new_height = options.height
-								end
-								vim.api.nvim_win_set_height(win_id, new_height)
-							end
-
-							if options.width then
-								local new_width
-								if type(options.width) == "string" then
-									if options.width:match("^%+%d+%%$") then
-										-- Relative increase: "+5%"
-										local percent = tonumber(options.width:match("%d+"))
-										local current_width = vim.api.nvim_win_get_width(win_id)
-										new_width = current_width + math.floor(current_width * percent / 100)
-									elseif options.width:match("^%d+%%$") then
-										-- Absolute percentage: "50%"
-										local percent = tonumber(options.width:match("%d+"))
-										new_width = math.floor(vim.o.columns * percent / 100)
-									else
-										-- Absolute value
-										new_width = tonumber(options.width)
-									end
-								else
-									new_width = options.width
-								end
-								vim.api.nvim_win_set_width(win_id, new_width)
-							end
+						local instance = terms[opts.name]
+						if instance then
+							instance:resize(options)
 						end
 					end,
 					reposition = function(options)
-						local term_instance = terms[opts.name]
-						if not term_instance or not term_instance.win_id then
-							return
-						end
-
-						local win_id = term_instance.win_id
-						local current_config = vim.api.nvim_win_get_config(win_id)
-
-						-- Handle floating windows
-						if current_config.relative == "editor" then
-							local new_config = vim.tbl_deep_extend("force", {}, current_config)
-
-							-- Handle position-based repositioning
-							if options.position then
-								local win_config = {
-									type = "floating",
-									position = options.position,
-									width = tostring(math.floor(current_config.width * 100 / vim.o.columns)) .. "%",
-									height = tostring(math.floor(current_config.height * 100 / vim.o.lines)) .. "%",
-									margin = "2%",
-								}
-								local final_win_opts = term_instance:_calculate_floating_geometry(win_config)
-								new_config.row = final_win_opts.row
-								new_config.col = final_win_opts.col
-							end
-
-							-- Handle row-based repositioning
-							if options.row then
-								if type(options.row) == "string" then
-									if options.row:match("^%+%d+$") then
-										-- Relative increase: "+10"
-										local offset = tonumber(options.row:match("%d+"))
-										new_config.row = current_config.row + offset
-									elseif options.row:match("^%d+%%$") then
-										-- Absolute percentage: "50%"
-										local percent = tonumber(options.row:match("%d+"))
-										new_config.row = math.floor(vim.o.lines * percent / 100)
-									else
-										-- Absolute value
-										new_config.row = tonumber(options.row)
-									end
-								else
-									new_config.row = options.row
-								end
-							end
-
-							-- Handle column-based repositioning
-							if options.col then
-								if type(options.col) == "string" then
-									if options.col:match("^%+%d+$") then
-										-- Relative increase: "+10"
-										local offset = tonumber(options.col:match("%d+"))
-										new_config.col = current_config.col + offset
-									elseif options.col:match("^%d+%%$") then
-										-- Absolute percentage: "50%"
-										local percent = tonumber(options.col:match("%d+"))
-										new_config.col = math.floor(vim.o.columns * percent / 100)
-									else
-										-- Absolute value
-										new_config.col = tonumber(options.col)
-									end
-								else
-									new_config.col = options.col
-								end
-							end
-
-							-- Ensure window stays within screen bounds
-							new_config.row = math.max(0, math.min(new_config.row, vim.o.lines - new_config.height))
-							new_config.col = math.max(0, math.min(new_config.col, vim.o.columns - new_config.width))
-
-							vim.api.nvim_win_set_config(win_id, new_config)
-
-						-- Handle split windows
-						else
-							if options.direction then
-								-- For split windows, we need to recreate the window in the new direction
-								local current_height = vim.api.nvim_win_get_height(win_id)
-								local current_width = vim.api.nvim_win_get_width(win_id)
-								local size_percent
-
-								if options.direction == "top" or options.direction == "bottom" then
-									size_percent = math.floor(current_height * 100 / vim.o.lines)
-								else
-									size_percent = math.floor(current_width * 100 / vim.o.columns)
-								end
-
-								-- Close current window
-								vim.api.nvim_win_close(win_id, true)
-
-								-- Create new split in the specified direction
-								local win_config = {
-									type = "split",
-									direction = options.direction,
-									size = tostring(size_percent) .. "%",
-								}
-								term_instance:_create_split_window(win_config)
-								vim.api.nvim_win_set_buf(term_instance.win_id, term_instance.bufnr)
-								term_instance:setup_win_options()
-							end
+						local instance = terms[opts.name]
+						if instance then
+							instance:reposition(options)
 						end
 					end,
 				},
@@ -615,7 +637,7 @@ function M.term(opts)
 	return create_tfling(opts)
 end
 
---- @param opts TflingOptions
+--- @param opts TflingOpts
 function M.buff(opts)
 	return create_tfling(opts)
 end
@@ -626,7 +648,7 @@ Config = {
 }
 
 --- @class SetupOpts
---- @field always? fun(term: TflingDetails) callback ran in all tfling buffers
+--- @field always? fun(term: TflingInstance) callback ran in all tfling buffers
 --- @field send_delay? number delay in milliseconds before sending commands (default: 100)
 ---
 function M.setup(opts)
@@ -696,108 +718,7 @@ vim.api.nvim_create_user_command("TFlingResizeCurrent", function(opts)
 		return
 	end
 
-	-- Create a temporary resize function similar to the one in setup callback
-	local function resize_window(options)
-		local win_id = term_instance.win_id
-		local current_config = vim.api.nvim_win_get_config(win_id)
-
-		-- Handle floating windows
-		if current_config.relative == "editor" then
-			local new_config = vim.tbl_deep_extend("force", {}, current_config)
-
-			if options.width then
-				if type(options.width) == "string" then
-					if options.width:match("^%+%d+%%$") then
-						-- Relative increase: "+5%"
-						local percent = tonumber(options.width:match("%d+"))
-						new_config.width = current_config.width + math.floor(current_config.width * percent / 100)
-					elseif options.width:match("^%d+%%$") then
-						-- Absolute percentage: "50%"
-						local percent = tonumber(options.width:match("%d+"))
-						new_config.width = math.floor(vim.o.columns * percent / 100)
-					else
-						-- Absolute value
-						new_config.width = tonumber(options.width)
-					end
-				else
-					new_config.width = options.width
-				end
-			end
-
-			if options.height then
-				if type(options.height) == "string" then
-					if options.height:match("^%+%d+%%$") then
-						-- Relative increase: "+5%"
-						local percent = tonumber(options.height:match("%d+"))
-						new_config.height = current_config.height + math.floor(current_config.height * percent / 100)
-					elseif options.height:match("^%d+%%$") then
-						-- Absolute percentage: "50%"
-						local percent = tonumber(options.height:match("%d+"))
-						new_config.height = math.floor(vim.o.lines * percent / 100)
-					else
-						-- Absolute value
-						new_config.height = tonumber(options.height)
-					end
-				else
-					new_config.height = options.height
-				end
-			end
-
-			-- Ensure window stays within screen bounds
-			new_config.width = math.min(new_config.width, vim.o.columns - 2)
-			new_config.height = math.min(new_config.height, vim.o.lines - 2)
-
-			vim.api.nvim_win_set_config(win_id, new_config)
-
-		-- Handle split windows
-		else
-			if options.height then
-				local new_height
-				if type(options.height) == "string" then
-					if options.height:match("^%+%d+%%$") then
-						-- Relative increase: "+5%"
-						local percent = tonumber(options.height:match("%d+"))
-						local current_height = vim.api.nvim_win_get_height(win_id)
-						new_height = current_height + math.floor(current_height * percent / 100)
-					elseif options.height:match("^%d+%%$") then
-						-- Absolute percentage: "50%"
-						local percent = tonumber(options.height:match("%d+"))
-						new_height = math.floor(vim.o.lines * percent / 100)
-					else
-						-- Absolute value
-						new_height = tonumber(options.height)
-					end
-				else
-					new_height = options.height
-				end
-				vim.api.nvim_win_set_height(win_id, new_height)
-			end
-
-			if options.width then
-				local new_width
-				if type(options.width) == "string" then
-					if options.width:match("^%+%d+%%$") then
-						-- Relative increase: "+5%"
-						local percent = tonumber(options.width:match("%d+"))
-						local current_width = vim.api.nvim_win_get_width(win_id)
-						new_width = current_width + math.floor(current_width * percent / 100)
-					elseif options.width:match("^%d+%%$") then
-						-- Absolute percentage: "50%"
-						local percent = tonumber(options.width:match("%d+"))
-						new_width = math.floor(vim.o.columns * percent / 100)
-					else
-						-- Absolute value
-						new_width = tonumber(options.width)
-					end
-				else
-					new_width = options.width
-				end
-				vim.api.nvim_win_set_width(win_id, new_width)
-			end
-		end
-	end
-
-	resize_window(resize_options)
+	term_instance:resize(resize_options)
 end, {
 	nargs = "?",
 	complete = function()
@@ -887,106 +808,7 @@ vim.api.nvim_create_user_command("TermRepositionCurrent", function(opts)
 		return
 	end
 
-	-- Create a temporary reposition function similar to the one in setup callback
-	local function reposition_window(options)
-		local win_id = term_instance.win_id
-		local current_config = vim.api.nvim_win_get_config(win_id)
-
-		-- Handle floating windows
-		if current_config.relative == "editor" then
-			local new_config = vim.tbl_deep_extend("force", {}, current_config)
-
-			-- Handle position-based repositioning
-			if options.position then
-				local win_config = {
-					type = "floating",
-					position = options.position,
-					width = tostring(math.floor(current_config.width * 100 / vim.o.columns)) .. "%",
-					height = tostring(math.floor(current_config.height * 100 / vim.o.lines)) .. "%",
-					margin = "2%",
-				}
-				local final_win_opts = term_instance:_calculate_floating_geometry(win_config)
-				new_config.row = final_win_opts.row
-				new_config.col = final_win_opts.col
-			end
-
-			-- Handle row-based repositioning
-			if options.row then
-				if type(options.row) == "string" then
-					if options.row:match("^%+%d+$") then
-						-- Relative increase: "+10"
-						local offset = tonumber(options.row:match("%d+"))
-						new_config.row = current_config.row + offset
-					elseif options.row:match("^%d+%%$") then
-						-- Absolute percentage: "50%"
-						local percent = tonumber(options.row:match("%d+"))
-						new_config.row = math.floor(vim.o.lines * percent / 100)
-					else
-						-- Absolute value
-						new_config.row = tonumber(options.row)
-					end
-				else
-					new_config.row = options.row
-				end
-			end
-
-			-- Handle column-based repositioning
-			if options.col then
-				if type(options.col) == "string" then
-					if options.col:match("^%+%d+$") then
-						-- Relative increase: "+10"
-						local offset = tonumber(options.col:match("%d+"))
-						new_config.col = current_config.col + offset
-					elseif options.col:match("^%d+%%$") then
-						-- Absolute percentage: "50%"
-						local percent = tonumber(options.col:match("%d+"))
-						new_config.col = math.floor(vim.o.columns * percent / 100)
-					else
-						-- Absolute value
-						new_config.col = tonumber(options.col)
-					end
-				else
-					new_config.col = options.col
-				end
-			end
-
-			-- Ensure window stays within screen bounds
-			new_config.row = math.max(0, math.min(new_config.row, vim.o.lines - new_config.height))
-			new_config.col = math.max(0, math.min(new_config.col, vim.o.columns - new_config.width))
-
-			vim.api.nvim_win_set_config(win_id, new_config)
-
-		-- Handle split windows
-		else
-			if options.direction then
-				-- For split windows, we need to recreate the window in the new direction
-				local current_height = vim.api.nvim_win_get_height(win_id)
-				local current_width = vim.api.nvim_win_get_width(win_id)
-				local size_percent
-
-				if options.direction == "top" or options.direction == "bottom" then
-					size_percent = math.floor(current_height * 100 / vim.o.lines)
-				else
-					size_percent = math.floor(current_width * 100 / vim.o.columns)
-				end
-
-				-- Close current window
-				vim.api.nvim_win_close(win_id, true)
-
-				-- Create new split in the specified direction
-				local win_config = {
-					type = "split",
-					direction = options.direction,
-					size = tostring(size_percent) .. "%",
-				}
-				term_instance:_create_split_window(win_config)
-				vim.api.nvim_win_set_buf(term_instance.win_id, term_instance.bufnr)
-				term_instance:setup_win_options()
-			end
-		end
-	end
-
-	reposition_window(reposition_options)
+	term_instance:reposition(reposition_options)
 end, {
 	nargs = "?",
 	complete = function()
