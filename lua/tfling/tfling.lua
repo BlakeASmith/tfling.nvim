@@ -84,6 +84,7 @@ function New(config)
 
 	local instance = setmetatable({}, Terminal)
 	instance.cmd = config.cmd
+	instance.name = config.name
 	instance.win_opts = config.win_opts or {} -- Legacy support
 	instance.bufnr = nil
 	instance.win_id = nil
@@ -173,6 +174,9 @@ function Terminal:open(opts)
 
 	vim.api.nvim_win_call(self.win_id, function()
 		self.job_id = vim.fn.termopen(self.cmd, { on_exit = on_exit })
+		if self.name then
+			pcall(vim.api.nvim_buf_set_name, self.bufnr, "tfling://" .. self.name)
+		end
 		vim.cmd("startinsert")
 	end)
 end
@@ -267,6 +271,7 @@ local terms = {}
 
 --- @class termTerm
 --- @field name? string the name (needs to be unique, defaults to cmd)
+--- @field key? string optional key/shortcut identifier to append to the default name
 --- @field cmd string the command/program to run
 --- @field tmux? boolean whether to use tmux for this terminal (defaults to false)
 --- @field abduco? boolean whether to use abduco for this terminal (defaults to false)
@@ -291,6 +296,9 @@ function M.term(opts)
 	-- Set default name to cmd if not provided
 	if opts.name == nil then
 		opts.name = opts.cmd
+		if opts.key then
+			opts.name = opts.name .. "-" .. opts.key
+		end
 	end
 
 	-- Handle tmux-backed terminals
@@ -316,6 +324,7 @@ function M.term(opts)
 	if terms[opts.name] == nil then
 		terms[opts.name] = New({
 			cmd = actual_cmd,
+			name = opts.name,
 			win_opts = {}, -- Legacy support
 		})
 	end
