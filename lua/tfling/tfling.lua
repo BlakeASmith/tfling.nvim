@@ -364,7 +364,7 @@ function Terminal:_create_split_window(win_config)
 	vim.api.nvim_win_set_buf(self.win_id, self.bufnr)
 end
 
-function Terminal:open_tab(opts)
+function Terminal:open_tab()
 	-- Check if tabpage already exists and is valid
 	if self.tabpage_id and vim.api.nvim_tabpage_is_valid(self.tabpage_id) then
 		-- Tabpage already exists, switch to it
@@ -402,39 +402,6 @@ function Terminal:open_tab(opts)
 
 	active_instances[self.win_id] = self
 	self:setup_win_options({})
-
-	-- If direction and size are specified, create splits within the tab
-	-- This allows tabs to have splits inside them
-	if opts and opts.direction and opts.size then
-		local size_str = opts.size
-		local size_percent = tonumber((size_str:gsub("%%", "")))
-		local actual_size
-
-		if opts.direction == "top" or opts.direction == "bottom" then
-			-- Horizontal split - calculate percentage of total lines
-			actual_size = math.floor(vim.o.lines * (size_percent / 100))
-			if opts.direction == "top" then
-				vim.cmd("topleft split")
-			else
-				vim.cmd("botright split")
-			end
-			vim.cmd("resize " .. actual_size)
-		elseif opts.direction == "left" or opts.direction == "right" then
-			-- Vertical split - calculate percentage of total columns
-			actual_size = math.floor(vim.o.columns * (size_percent / 100))
-			if opts.direction == "left" then
-				vim.cmd("topleft vsplit")
-			else
-				vim.cmd("botright vsplit")
-			end
-			vim.cmd("vertical resize " .. actual_size)
-		end
-
-		-- Update window ID to the newly created split window
-		self.win_id = vim.api.nvim_get_current_win()
-		vim.api.nvim_win_set_buf(self.win_id, self.bufnr)
-		active_instances[self.win_id] = self
-	end
 
 	-- Update current_index when opening a tab
 	for i, name in ipairs(buffer_list) do
@@ -813,8 +780,6 @@ end
 --- @field cmd? string
 --- @field init? string | fun(term: TflingInstance)
 --- @field bufnr? number
---- @field direction? "top" | "bottom" | "left" | "right"
---- @field size? string | number
 --- @field tmux? boolean
 --- @field abduco? boolean
 --- @field setup? fun(term: TflingInstance)
@@ -853,17 +818,8 @@ local function create_tfling_tab(opts)
 		table.insert(buffer_list, opts.name)
 	end
 
-	-- Prepare tab options (direction and size for splits within tab)
-	local tab_opts = {}
-	if opts.direction then
-		tab_opts.direction = opts.direction
-	end
-	if opts.size then
-		tab_opts.size = opts.size
-	end
-
 	-- Open the tab
-	terms[opts.name]:open_tab(tab_opts)
+	terms[opts.name]:open_tab()
 
 	-- call setup function in autocommand
 	local augroup_name = "tfling." .. opts.name .. ".config"
