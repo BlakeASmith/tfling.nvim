@@ -322,7 +322,7 @@ local terms = {}
 --- @field setup? fun(details: termTermDetails) function to run on mount (receives termTermDetails table)
 
 --- @param opts termTerm
-function M.term(opts)
+local function create_tfling(opts)
 	if opts.setup == nil then
 		opts.setup = function() end
 	end
@@ -340,7 +340,7 @@ function M.term(opts)
 		elseif opts.init and type(opts.init) == "string" then
 			opts.name = opts.init
 		else
-			vim.notify("tfling: 'name' or 'cmd' is required", vim.log.levels.ERROR)
+			vim.notify("tfling: 'name', 'cmd' or 'init' is required", vim.log.levels.ERROR)
 			return
 		end
 	end
@@ -619,6 +619,24 @@ function M.term(opts)
 	if vim.api.nvim_get_current_buf() == terms[opts.name].bufnr then
 		on_enter()
 	end
+end
+
+function M.term(opts)
+	return create_tfling(opts)
+end
+
+--- @class termBuff
+--- @field name? string the name (needs to be unique, defaults to init if string)
+--- @field init? string|fun(term: termTermDetails) command string or function to run on open
+--- @field bufnr? number existing buffer number to use
+--- @field win? termFloatingWin|termSplitWin window configuration (defaults to floating center)
+--- @field width? string width as a percentage like "80%" (deprecated, use win.width)
+--- @field height? string height as a percentage like "80%" (deprecated, use win.height)
+--- @field setup? fun(details: termTermDetails) function to run on mount (receives termTermDetails table)
+
+--- @param opts termBuff
+function M.buff(opts)
+	return create_tfling(opts)
 end
 
 Config = {
