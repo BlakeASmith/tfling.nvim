@@ -333,12 +333,11 @@ local function create_tfling(opts)
 		}
 	end
 
-	-- Set default name to cmd if not provided
+	-- Set default name to cmd or init if not provided
 	if opts.name == nil then
-		if opts.cmd then
-			opts.name = opts.cmd:gsub("[^%w%-_]", "_")
-		elseif opts.init and type(opts.init) == "string" then
-			opts.name = opts.init:gsub("[^%w%-_]", "_")
+		local source = opts.cmd or (type(opts.init) == "string" and opts.init)
+		if source then
+			opts.name = source:gsub("[^%w%-_]", "_")
 		else
 			vim.notify("tfling: 'name', 'cmd' or 'init' is required", vim.log.levels.ERROR)
 			return
