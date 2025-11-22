@@ -203,21 +203,6 @@ require("tfling").buff({
 })
 ```
 
-**Multiple Commands with Pipe:**
-
-You can chain multiple Vim commands using the `|` separator in the `init` string.
-
-```lua
-require("tfling").buff({
-  name = "split_view",
-  init = "e file1.txt | vsplit file2.txt", -- Opens file1, then splits and opens file2
-  win = {
-    width = "90%",
-    height = "90%",
-  },
-})
-```
-
 ## License
 
 MIT

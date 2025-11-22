@@ -274,54 +274,45 @@ end
 
 local terms = {}
 
---- @class termResizeOptions
---- @field width? number|string width as number, percentage ("50%"), or relative ("+5%")
---- @field height? number|string height as number, percentage ("50%"), or relative ("+5%")
+--- @class TflingWinConfig
+--- @field type? "floating" | "split"
+--- @field position? "top-left" | "top-center" | "top-right" | "bottom-left" | "bottom-right" | "bottom-center" | "left-center" | "right-center" | "center"
+--- @field width? string | number
+--- @field height? string | number
+--- @field margin? string | number
+--- @field direction? "top" | "bottom" | "left" | "right"
+--- @field size? string | number
+--- @field row? number|string
+--- @field col? number|string
 
---- @class termRepositionOptions
---- @field position? "top-left" | "top-center" | "top-right" | "bottom-left" | "bottom-right" | "bottom-center" | "left-center" | "right-center" | "center" position for floating windows
---- @field row? number|string row position as number, percentage ("50%"), or relative ("+10")
---- @field col? number|string column position as number, percentage ("50%"), or relative ("+10")
---- @field direction? "top" | "bottom" | "left" | "right" direction for split windows
+--- @class TflingWindowOps
+--- @field resize fun(options: TflingWinConfig)
+--- @field reposition fun(options: TflingWinConfig)
 
---- @class termWindowOps
---- @field resize fun(options: termResizeOptions) resize the terminal window
---- @field reposition fun(options: termRepositionOptions) reposition the terminal window
+--- @class TflingDetails
+--- @field job_id? number
+--- @field bufnr number
+--- @field win_id number
+--- @field name string
+--- @field cmd? string
+--- @field send function
+--- @field win TflingWindowOps
+--- @field selected_text? string
 
---- @class termTermDetails
---- @field job_id number the job ID (channel ID for nvim_chan_send)
---- @field bufnr number the buffer number
---- @field win_id number the window ID
---- @field name string the terminal name
---- @field cmd string the command being run
---- @field send function helper function to send commands to the terminal
---- @field win termWindowOps window manipulation functions
---- @field selected_text? string the text that was selected when triggered from visual mode
+--- @class TflingOptions
+--- @field name? string
+--- @field cmd? string
+--- @field init? string | fun(term: TflingDetails)
+--- @field bufnr? number
+--- @field win? TflingWinConfig
+--- @field tmux? boolean
+--- @field abduco? boolean
+--- @field setup? fun(term: TflingDetails)
+--- @field send_delay? number
+--- @field width? string|number (deprecated)
+--- @field height? string|number (deprecated)
 
---- @class termFloatingWin
---- @field type "floating"
---- @field position? "top-left" | "top-center" | "top-right" | "bottom-left" | "bottom-right" | "bottom-center" | "left-center" | "right-center" position of floating window (defaults to "center")
---- @field width? string width as a percentage like "80%" (defaults to "80%")
---- @field height? string height as a percentage like "80%" (defaults to "80%")
---- @field margin? string margin as a percentage like "2%" (defaults to "2%")
-
---- @class termSplitWin
---- @field type "split"
---- @field direction string split direction: "top", "bottom", "left", "right"
---- @field size string size as a percentage like "30%"
-
---- @class termTerm
---- @field name? string the name (needs to be unique, defaults to cmd)
---- @field cmd string the command/program to run
---- @field tmux? boolean whether to use tmux for this terminal (defaults to false)
---- @field abduco? boolean whether to use abduco for this terminal (defaults to false)
---- @field win? termFloatingWin|termSplitWin window configuration (defaults to floating center)
---- @field width? string width as a percentage like "80%" (deprecated, use win.width)
---- @field height? string height as a percentage like "80%" (deprecated, use win.height)
---- @field send_delay? number delay in milliseconds before sending commands (defaults to global config)
---- @field setup? fun(details: termTermDetails) function to run on mount (receives termTermDetails table)
-
---- @param opts termTerm
+--- @param opts TflingOptions
 local function create_tfling(opts)
 	if opts.setup == nil then
 		opts.setup = function() end
@@ -624,16 +615,7 @@ function M.term(opts)
 	return create_tfling(opts)
 end
 
---- @class termBuff
---- @field name? string the name (needs to be unique, defaults to init if string)
---- @field init? string|fun(term: termTermDetails) command string or function to run on open
---- @field bufnr? number existing buffer number to use
---- @field win? termFloatingWin|termSplitWin window configuration (defaults to floating center)
---- @field width? string width as a percentage like "80%" (deprecated, use win.width)
---- @field height? string height as a percentage like "80%" (deprecated, use win.height)
---- @field setup? fun(details: termTermDetails) function to run on mount (receives termTermDetails table)
-
---- @param opts termBuff
+--- @param opts TflingOptions
 function M.buff(opts)
 	return create_tfling(opts)
 end
@@ -644,7 +626,7 @@ Config = {
 }
 
 --- @class SetupOpts
---- @field always? fun(termTermDetails) callback ran in all tfling buffers
+--- @field always? fun(term: TflingDetails) callback ran in all tfling buffers
 --- @field send_delay? number delay in milliseconds before sending commands (default: 100)
 ---
 function M.setup(opts)
