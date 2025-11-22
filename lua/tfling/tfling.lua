@@ -47,8 +47,6 @@ local geometry = require("tfling.geometry")
 --- @field abduco? boolean
 --- @field setup? fun(term: TflingInstance)
 --- @field send_delay? number
---- @field width? string|number (deprecated)
---- @field height? string|number (deprecated)
 
 ---
 -- Internal helper to calculate pixel geometry for floating windows.
@@ -123,7 +121,6 @@ function New(config)
 
 	local instance = setmetatable({}, Terminal)
 	instance.cmd = config.cmd
-	instance.win_opts = config.win_opts or {} -- Legacy support
 	instance.bufnr = config.bufnr
 	instance.win_id = nil
 	instance.job_id = nil
@@ -222,7 +219,7 @@ function Terminal:open(opts)
 			self:_create_split_window(win_config)
 		end
 		active_instances[self.win_id] = self
-		self:setup_win_options()
+		self:setup_win_options(win_config)
 		if self.cmd then
 			vim.cmd("startinsert")
 		end
@@ -241,7 +238,7 @@ function Terminal:open(opts)
 		self:_create_split_window(win_config)
 	end
 	active_instances[self.win_id] = self
-	self:setup_win_options()
+	self:setup_win_options(win_config)
 
 	if self.init then
 		vim.api.nvim_win_call(self.win_id, function()
@@ -293,9 +290,9 @@ function Terminal:_create_split_window(win_config)
 	vim.api.nvim_win_set_buf(self.win_id, self.bufnr)
 end
 
-function Terminal:setup_win_options()
+function Terminal:setup_win_options(win_config)
 	local win_id = self.win_id
-	if self.win_config and self.win_config.type == "floating" then
+	if win_config and win_config.type == "floating" then
 		vim.wo[win_id].winhighlight = "Normal:NormalFloat,FloatBorder:FloatBorder"
 	end
 	vim.wo[win_id].relativenumber = false
@@ -506,7 +503,7 @@ function Terminal:reposition(options)
 			}
 			self:_create_split_window(win_config)
 			vim.api.nvim_win_set_buf(self.win_id, self.bufnr)
-			self:setup_win_options()
+			self:setup_win_options(win_config)
 		end
 	end
 end
@@ -531,14 +528,6 @@ local function create_tfling(opts)
 		}
 	end
 
-	-- Handle deprecated top-level width/height
-	if opts.width and not opts.win.width then
-		opts.win.width = opts.width
-	end
-	if opts.height and not opts.win.height then
-		opts.win.height = opts.height
-	end
-
 	-- Set default name to cmd or init if not provided
 	if opts.name == nil then
 		local source = opts.cmd or (type(opts.init) == "string" and opts.init)
@@ -561,7 +550,6 @@ local function create_tfling(opts)
 			init = opts.init,
 			tmux = opts.tmux,
 			abduco = opts.abduco,
-			win_opts = {}, -- Legacy support
 		})
 	end
 
