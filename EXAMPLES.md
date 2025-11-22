@@ -2,296 +2,261 @@
 
 ## Basic Examples
 
-### Simple Floating Terminal
+### Simple Floating Window
 
 ```lua
 local tfling = require("tfling.v2")
 
-local term = tfling.create({
-  id = "quick-term",
-  layout = {
-    type = "float",
-    config = {
-      width = "80%",
-      height = "60%",
-      position = "center",
-    },
-    buffer = {
-      type = "terminal",
-      source = "bash",
-    },
-  },
+-- Create experience
+local exp = tfling.create({
+  id = "quick-tool",
 })
 
+-- Plugin creates the window
+local buf = vim.api.nvim_create_buf(true, true)
+vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "Hello, World!" })
+
+local win = vim.api.nvim_open_win(buf, true, {
+  relative = "editor",
+  width = 50,
+  height = 10,
+  row = 10,
+  col = 30,
+  border = "rounded",
+})
+
+-- Register with Tfling
+exp:register_window(win)
+exp:register_buffer(buf)
+
 -- Toggle it
-term:toggle()
+exp:toggle()
 ```
 
 ### Terminal in Split
 
 ```lua
-local term = tfling.create({
+local tfling = require("tfling.v2")
+
+local exp = tfling.create({
   id = "side-term",
-  layout = {
-    type = "split",
-    config = {
-      direction = "vertical",
-      size = "30%",
-      position = "right",
-    },
-    buffer = {
-      type = "terminal",
-      source = "htop",
-    },
-  },
 })
 
-term:show()
+-- Create terminal buffer
+local buf = vim.api.nvim_create_buf(true, true)
+vim.bo[buf].bufhidden = "hide"
+vim.bo[buf].filetype = "tfling"
+
+-- Create split window
+vim.cmd("botright vsplit")
+vim.cmd("vertical resize 30")
+local win = vim.api.nvim_get_current_win()
+vim.api.nvim_win_set_buf(win, buf)
+
+-- Start terminal
+local job_id = vim.fn.termopen("bash", {
+  on_exit = function()
+    -- Handle exit
+  end,
+})
+
+-- Register with Tfling
+exp:register_window(win, {
+  close_on_hide = false,  -- Keep window open when hiding
+})
+exp:register_buffer(buf, {
+  persistent = true,
+})
 ```
 
 ### File Buffer in Float
 
 ```lua
-local file_viewer = tfling.create({
+local tfling = require("tfling.v2")
+
+local exp = tfling.create({
   id = "file-viewer",
-  layout = {
-    type = "float",
-    config = {
-      width = "70%",
-      height = "80%",
-      position = "center",
-      border = "rounded",
-    },
-    buffer = {
-      type = "file",
-      source = "/tmp/log.txt",
-      options = {
-        readonly = true,
-      },
-    },
-  },
+})
+
+-- Open file buffer
+local buf = vim.fn.bufadd("/tmp/log.txt")
+vim.fn.bufload(buf)
+
+-- Create floating window
+local win = vim.api.nvim_open_win(buf, true, {
+  relative = "editor",
+  width = 70,
+  height = 40,
+  row = 5,
+  col = 10,
+  border = "single",
+})
+
+-- Register
+exp:register_window(win)
+exp:register_buffer(buf, {
+  persistent = true,
 })
 ```
 
-## Advanced Layout Examples
+## Advanced Examples
+
+### Lazy Creation Pattern
+
+Create windows only when showing:
+
+```lua
+local tfling = require("tfling.v2")
+
+local exp = tfling.create({
+  id = "lazy-tool",
+  hooks = {
+    before_show = function(exp)
+      -- Create windows only when showing
+      if #exp.windows == 0 then
+        local buf = vim.api.nvim_create_buf(true, true)
+        vim.api.nvim_buf_set_lines(buf, 0, -1, false, {
+          "This window was created on show",
+        })
+        
+        local win = vim.api.nvim_open_win(buf, true, {
+          relative = "editor",
+          width = 60,
+          height = 20,
+          row = 10,
+          col = 20,
+        })
+        
+        exp:register_window(win)
+        exp:register_buffer(buf)
+      end
+    end,
+    before_hide = function(exp)
+      -- Close windows when hiding
+      for _, win_id in ipairs(exp.windows) do
+        if vim.api.nvim_win_is_valid(win_id) then
+          vim.api.nvim_win_close(win_id, true)
+        end
+      end
+      exp.windows = {}
+      exp.buffers = {}
+    end,
+  },
+})
+
+-- Toggle will create/destroy windows
+exp:toggle()
+```
+
+### Multi-Window Experience
+
+```lua
+local tfling = require("tfling.v2")
+
+local function create_multi_window_tool()
+  local exp = tfling.create({
+    id = "multi-tool",
+  })
+  
+  -- Create left window
+  local buf1 = vim.api.nvim_create_buf(true, true)
+  vim.api.nvim_buf_set_lines(buf1, 0, -1, false, { "Left Panel" })
+  local win1 = vim.api.nvim_open_win(buf1, true, {
+    relative = "editor",
+    width = 40,
+    height = 30,
+    row = 5,
+    col = 5,
+  })
+  
+  -- Create right window
+  local buf2 = vim.api.nvim_create_buf(true, true)
+  vim.api.nvim_buf_set_lines(buf2, 0, -1, false, { "Right Panel" })
+  local win2 = vim.api.nvim_open_win(buf2, true, {
+    relative = "editor",
+    width = 40,
+    height = 30,
+    row = 5,
+    col = 50,
+  })
+  
+  -- Register all
+  exp:register_window(win1)
+  exp:register_window(win2)
+  exp:register_buffer(buf1)
+  exp:register_buffer(buf2)
+  
+  return exp
+end
+
+local tool = create_multi_window_tool()
+tool:toggle()
+```
 
 ### Development Environment
 
-A complete development setup with editor, terminal, and file tree:
-
 ```lua
-local dev_env = tfling.create({
-  id = "dev-env",
-  layout = {
-    type = "split",
-    config = {
-      direction = "horizontal",
-      size = "100%",
+local tfling = require("tfling.v2")
+
+local function create_dev_env()
+  local exp = tfling.create({
+    id = "dev-env",
+    hooks = {
+      before_show = function(exp)
+        if #exp.windows > 0 then
+          return  -- Already created
+        end
+        
+        -- File tree (left split)
+        vim.cmd("topleft vsplit")
+        vim.cmd("vertical resize 25")
+        local tree_win = vim.api.nvim_get_current_win()
+        local tree_buf = vim.api.nvim_create_buf(true, true)
+        vim.api.nvim_win_set_buf(tree_win, tree_buf)
+        vim.cmd("Oil")  -- Or your file tree plugin
+        
+        -- Main editor (right split)
+        vim.cmd("wincmd l")
+        vim.cmd("split")
+        local editor_win = vim.api.nvim_get_current_win()
+        local editor_buf = vim.fn.bufadd("src/main.lua")
+        vim.fn.bufload(editor_buf)
+        vim.api.nvim_win_set_buf(editor_win, editor_buf)
+        
+        -- Terminal (bottom split)
+        vim.cmd("wincmd j")
+        local term_win = vim.api.nvim_get_current_win()
+        local term_buf = vim.api.nvim_create_buf(true, true)
+        vim.bo[term_buf].bufhidden = "hide"
+        vim.api.nvim_win_set_buf(term_win, term_buf)
+        vim.fn.termopen("bash")
+        
+        -- Register all
+        exp:register_window(tree_win)
+        exp:register_window(editor_win)
+        exp:register_window(term_win)
+        exp:register_buffer(tree_buf)
+        exp:register_buffer(editor_buf)
+        exp:register_buffer(term_buf)
+      end,
+      before_hide = function(exp)
+        -- Close all windows
+        for _, win_id in ipairs(exp.windows) do
+          if vim.api.nvim_win_is_valid(win_id) then
+            vim.api.nvim_win_close(win_id, true)
+          end
+        end
+        exp.windows = {}
+        exp.buffers = {}
+      end,
     },
-    children = {
-      -- File tree on left
-      {
-        type = "split",
-        config = {
-          direction = "vertical",
-          size = "25%",
-          position = "left",
-        },
-        buffer = {
-          type = "function",
-          source = function(exp, buf)
-            vim.cmd("Oil")
-          end,
-        },
-      },
-      -- Main editor area
-      {
-        type = "split",
-        config = {
-          direction = "vertical",
-          size = "75%",
-        },
-        children = {
-          -- Editor (top)
-          {
-            type = "split",
-            config = {
-              direction = "horizontal",
-              size = "70%",
-            },
-            buffer = {
-              type = "file",
-              source = "src/main.lua",
-            },
-          },
-          -- Terminal (bottom)
-          {
-            type = "split",
-            config = {
-              direction = "horizontal",
-              size = "30%",
-            },
-            buffer = {
-              type = "terminal",
-              source = "bash",
-            },
-          },
-        },
-      },
-    },
-  },
-  hooks = {
-    after_show = function(exp)
-      vim.notify("Development environment ready!")
-    end,
-  },
-})
-```
+  })
+  
+  return exp
+end
 
-### Monitoring Dashboard
-
-Multiple floating windows showing different system metrics:
-
-```lua
-local monitoring = tfling.create({
-  id = "monitoring",
-  layout = {
-    type = "container",
-    children = {
-      -- CPU monitor (top-left)
-      {
-        type = "float",
-        config = {
-          width = "45%",
-          height = "45%",
-          position = "top-left",
-          border = "single",
-        },
-        buffer = {
-          type = "terminal",
-          source = "htop",
-        },
-      },
-      -- I/O monitor (top-right)
-      {
-        type = "float",
-        config = {
-          width = "45%",
-          height = "45%",
-          position = "top-right",
-          border = "single",
-        },
-        buffer = {
-          type = "terminal",
-          source = "iotop",
-        },
-      },
-      -- Network monitor (bottom-left)
-      {
-        type = "float",
-        config = {
-          width = "45%",
-          height = "45%",
-          position = "bottom-left",
-          border = "single",
-        },
-        buffer = {
-          type = "terminal",
-          source = "nethogs",
-        },
-      },
-      -- Log viewer (bottom-right)
-      {
-        type = "float",
-        config = {
-          width = "45%",
-          height = "45%",
-          position = "bottom-right",
-          border = "single",
-        },
-        buffer = {
-          type = "file",
-          source = "/var/log/syslog",
-          options = {
-            readonly = true,
-          },
-        },
-      },
-    },
-  },
-})
-```
-
-### Git Workflow
-
-A git-focused layout with status, log, and diff views:
-
-```lua
-local git_workflow = tfling.create({
-  id = "git-workflow",
-  layout = {
-    type = "split",
-    config = {
-      direction = "horizontal",
-      size = "100%",
-    },
-    children = {
-      -- Git status (left)
-      {
-        type = "split",
-        config = {
-          direction = "vertical",
-          size = "30%",
-        },
-        children = {
-          {
-            type = "split",
-            config = {
-              direction = "horizontal",
-              size = "50%",
-            },
-            buffer = {
-              type = "terminal",
-              source = "git status",
-            },
-          },
-          {
-            type = "split",
-            config = {
-              direction = "horizontal",
-              size = "50%",
-            },
-            buffer = {
-              type = "terminal",
-              source = "git branch -a",
-            },
-          },
-        },
-      },
-      -- Main diff view (right)
-      {
-        type = "split",
-        config = {
-          direction = "vertical",
-          size = "70%",
-        },
-        buffer = {
-          type = "terminal",
-          source = "git diff",
-        },
-      },
-    },
-  },
-  hooks = {
-    before_show = function(exp)
-      -- Refresh git status
-      exp.metadata.last_refresh = vim.loop.now()
-    end,
-    after_show = function(exp)
-      vim.notify("Git workflow ready")
-    end,
-  },
-})
+local dev_env = create_dev_env()
+dev_env:toggle()
 ```
 
 ## Hook Examples
@@ -299,49 +264,42 @@ local git_workflow = tfling.create({
 ### Debugger Integration
 
 ```lua
+local tfling = require("tfling.v2")
+
 local debugger = tfling.create({
   id = "debugger",
-  layout = {
-    type = "split",
-    config = {
-      direction = "horizontal",
-      size = "100%",
-    },
-    children = {
-      {
-        type = "split",
-        config = {
-          direction = "vertical",
-          size = "70%",
-        },
-        buffer = {
-          type = "file",
-          source = "src/main.py",
-        },
-      },
-      {
-        type = "split",
-        config = {
-          direction = "vertical",
-          size = "30%",
-        },
-        buffer = {
-          type = "terminal",
-          source = "python -m pdb",
-        },
-      },
-    },
-  },
   hooks = {
     before_show = function(exp)
-      -- Set up debugger state
+      if #exp.windows > 0 then
+        return
+      end
+      
+      -- Create editor window
+      local editor_buf = vim.fn.bufadd("src/main.py")
+      vim.fn.bufload(editor_buf)
+      vim.cmd("split")
+      local editor_win = vim.api.nvim_get_current_win()
+      vim.api.nvim_win_set_buf(editor_win, editor_buf)
+      
+      -- Create debugger terminal
+      vim.cmd("wincmd j")
+      local debug_buf = vim.api.nvim_create_buf(true, true)
+      vim.bo[debug_buf].bufhidden = "hide"
+      local debug_win = vim.api.nvim_get_current_win()
+      vim.api.nvim_win_set_buf(debug_win, debug_buf)
+      vim.fn.termopen("python -m pdb")
+      
+      exp:register_window(editor_win)
+      exp:register_window(debug_win)
+      exp:register_buffer(editor_buf)
+      exp:register_buffer(debug_buf)
+      
       exp.metadata.debugger_attached = false
-      exp.metadata.breakpoints = {}
     end,
     after_show = function(exp)
       -- Attach debugger
-      local debug_window = exp.windows[2]  -- Terminal window
-      vim.api.nvim_win_call(debug_window, function()
+      local debug_win = exp.windows[2]
+      vim.api.nvim_win_call(debug_win, function()
         vim.cmd("DebuggerStart")
         exp.metadata.debugger_attached = true
       end)
@@ -352,10 +310,15 @@ local debugger = tfling.create({
         vim.cmd("DebuggerStop")
         exp.metadata.debugger_attached = false
       end
-    end,
-    on_focus = function(exp, win_id)
-      -- Update statusline
-      vim.g.current_debugger_window = win_id
+      
+      -- Close windows
+      for _, win_id in ipairs(exp.windows) do
+        if vim.api.nvim_win_is_valid(win_id) then
+          vim.api.nvim_win_close(win_id, true)
+        end
+      end
+      exp.windows = {}
+      exp.buffers = {}
     end,
   },
 })
@@ -364,85 +327,56 @@ local debugger = tfling.create({
 ### Custom Buffer Setup
 
 ```lua
+local tfling = require("tfling.v2")
+
 local scratchpad = tfling.create({
   id = "scratchpad",
-  layout = {
-    type = "float",
-    config = {
-      width = "60%",
-      height = "70%",
-      position = "center",
-    },
-    buffer = {
-      type = "scratch",
-      options = {
-        filetype = "markdown",
-      },
-    },
-  },
   hooks = {
-    after_show = function(exp)
-      -- Set up buffer content and keymaps
-      local buf_id = exp.buffers[1]
+    before_show = function(exp)
+      if #exp.windows > 0 then
+        return
+      end
       
-      -- Set initial content
-      vim.api.nvim_buf_set_lines(buf_id, 0, -1, false, {
+      local buf = vim.api.nvim_create_buf(true, true)
+      vim.bo[buf].buftype = "nofile"
+      vim.bo[buf].filetype = "markdown"
+      
+      vim.api.nvim_buf_set_lines(buf, 0, -1, false, {
         "# Scratchpad",
         "",
         "Write your notes here...",
         "",
       })
       
+      local win = vim.api.nvim_open_win(buf, true, {
+        relative = "editor",
+        width = 60,
+        height = 30,
+        row = 10,
+        col = 20,
+      })
+      
       -- Set up keymaps
       vim.keymap.set("n", "q", function()
         exp:hide()
-      end, { buffer = buf_id, silent = true })
+      end, { buffer = buf, silent = true })
       
       vim.keymap.set("n", "<C-s>", function()
         vim.cmd("w /tmp/scratchpad.md")
         vim.notify("Saved to /tmp/scratchpad.md")
-      end, { buffer = buf_id, silent = true })
+      end, { buffer = buf, silent = true })
+      
+      exp:register_window(win)
+      exp:register_buffer(buf)
     end,
-  },
-})
-```
-
-### Session Management
-
-```lua
-local persistent_term = tfling.create({
-  id = "persistent-term",
-  layout = {
-    type = "float",
-    config = {
-      width = "80%",
-      height = "60%",
-      position = "center",
-    },
-    buffer = {
-      type = "terminal",
-      source = "tmux",
-      options = {
-        tmux = true,
-        persistent = true,
-      },
-    },
-  },
-  hooks = {
     before_hide = function(exp)
-      -- Save tmux session state
-      local buf_id = exp.buffers[1]
-      if exp.buffer_specs[buf_id].job_id then
-        -- Send detach command to tmux
-        vim.api.nvim_chan_send(
-          exp.buffer_specs[buf_id].job_id,
-          vim.api.nvim_replace_termcodes("<C-b>d", true, false, true)
-        )
+      for _, win_id in ipairs(exp.windows) do
+        if vim.api.nvim_win_is_valid(win_id) then
+          vim.api.nvim_win_close(win_id, true)
+        end
       end
-    end,
-    after_show = function(exp)
-      -- Restore tmux session
-      vim.notify("Tmux session restored")
+      exp.windows = {}
+      exp.buffers = {}
     end,
   },
 })
@@ -453,243 +387,25 @@ local persistent_term = tfling.create({
 ### Development Tools Group
 
 ```lua
-local dev_tools = tfling.group("dev-tools")
+local tfling = require("tfling.v2")
 
--- Add multiple experiences
+-- Create experiences
+local file_tree = tfling.create({ id = "file-tree" })
+local terminal = tfling.create({ id = "terminal" })
+local git_status = tfling.create({ id = "git-status" })
+
+-- Set up each experience...
+-- (registration code omitted for brevity)
+
+-- Create group
+local dev_tools = tfling.group("dev-tools")
 dev_tools:add("file-tree")
 dev_tools:add("terminal")
 dev_tools:add("git-status")
-dev_tools:add("lsp-output")
 
 -- Toggle entire group
 vim.keymap.set("n", "<leader>dt", function()
   dev_tools:toggle()
-end)
-
--- Show all tools
-vim.keymap.set("n", "<leader>ds", function()
-  dev_tools:show()
-end)
-
--- Hide all tools
-vim.keymap.set("n", "<leader>dh", function()
-  dev_tools:hide()
-end)
-```
-
-### Workspace Presets
-
-```lua
--- Frontend workspace
-local frontend_workspace = tfling.group("frontend")
-frontend_workspace:add("file-tree")
-frontend_workspace:add("terminal")
-frontend_workspace:add("browser-preview")
-
--- Backend workspace
-local backend_workspace = tfling.group("backend")
-backend_workspace:add("file-tree")
-backend_workspace:add("terminal")
-backend_workspace:add("database-client")
-backend_workspace:add("api-docs")
-
--- Switch workspaces
-vim.keymap.set("n", "<leader>wf", function()
-  backend_workspace:hide()
-  frontend_workspace:show()
-end)
-
-vim.keymap.set("n", "<leader>wb", function()
-  frontend_workspace:hide()
-  backend_workspace:show()
-end)
-```
-
-## Layout Builder Examples
-
-### Fluent API
-
-```lua
-local tfling = require("tfling.v2")
-
--- Build complex layout using fluent API
-local layout = tfling.layout()
-  :split("horizontal", { size = "100%" })
-    :split("vertical", { size = "30%", position = "left" })
-      :buffer({ type = "file", source = "filetree" })
-    :end_split()
-    :split("vertical", { size = "70%" })
-      :split("horizontal", { size = "70%" })
-        :buffer({ type = "file", source = "src/main.lua" })
-      :end_split()
-      :split("horizontal", { size = "30%" })
-        :buffer({ type = "terminal", source = "bash" })
-      :end_split()
-    :end_split()
-  :end_split()
-  :build()
-
-local experience = tfling.create({
-  id = "dev-layout",
-  layout = layout,
-})
-```
-
-## Dynamic Layout Modification
-
-### Resizable Panels
-
-```lua
-local resizable = tfling.create({
-  id = "resizable",
-  layout = {
-    type = "split",
-    config = {
-      direction = "horizontal",
-      size = "100%",
-    },
-    children = {
-      {
-        type = "split",
-        config = {
-          direction = "vertical",
-          size = "30%",
-        },
-        buffer = { type = "file", source = "left.txt" },
-      },
-      {
-        type = "split",
-        config = {
-          direction = "vertical",
-          size = "70%",
-        },
-        buffer = { type = "file", source = "right.txt" },
-      },
-    },
-  },
-})
-
--- Resize left panel
-vim.keymap.set("n", "<leader>rl", function()
-  local left_win = resizable.windows[1]
-  resizable:resize_window(left_win, { width = "+10%" })
-end)
-
--- Resize right panel
-vim.keymap.set("n", "<leader>rr", function()
-  local right_win = resizable.windows[2]
-  resizable:resize_window(right_win, { width = "+10%" })
-end)
-```
-
-## Plugin Integration Examples
-
-### LSP Integration
-
-```lua
-local lsp_diagnostics = tfling.create({
-  id = "lsp-diagnostics",
-  layout = {
-    type = "float",
-    config = {
-      width = "50%",
-      height = "40%",
-      position = "bottom-right",
-    },
-    buffer = {
-      type = "scratch",
-      options = {
-        filetype = "lsp-diagnostics",
-      },
-    },
-  },
-  hooks = {
-    after_show = function(exp)
-      local buf_id = exp.buffers[1]
-      
-      -- Populate with LSP diagnostics
-      local diagnostics = vim.diagnostic.get(0)
-      local lines = {}
-      for _, diag in ipairs(diagnostics) do
-        table.insert(lines, string.format(
-          "[%s] %s:%d:%d - %s",
-          diag.severity,
-          vim.fn.bufname(diag.bufnr),
-          diag.lnum + 1,
-          diag.col + 1,
-          diag.message
-        ))
-      end
-      
-      vim.api.nvim_buf_set_lines(buf_id, 0, -1, false, lines)
-    end,
-  },
-})
-
--- Show diagnostics on demand
-vim.keymap.set("n", "<leader>ld", function()
-  lsp_diagnostics:toggle()
-end)
-```
-
-### File Explorer Integration
-
-```lua
-local file_explorer = tfling.create({
-  id = "file-explorer",
-  layout = {
-    type = "split",
-    config = {
-      direction = "vertical",
-      size = "25%",
-      position = "left",
-    },
-    buffer = {
-      type = "function",
-      source = function(exp, buf)
-        -- Use Oil.nvim or similar
-        vim.cmd("Oil")
-      end,
-    },
-  },
-  hooks = {
-    after_show = function(exp)
-      -- Set up file explorer keymaps
-      local buf_id = exp.buffers[1]
-      vim.keymap.set("n", "q", function()
-        exp:hide()
-      end, { buffer = buf_id, silent = true })
-    end,
-  },
-})
-```
-
-### Quickfix Integration
-
-```lua
-local quickfix = tfling.create({
-  id = "quickfix",
-  layout = {
-    type = "float",
-    config = {
-      width = "80%",
-      height = "30%",
-      position = "bottom-center",
-    },
-    buffer = {
-      type = "function",
-      source = function(exp, buf)
-        vim.cmd("copen")
-        -- Get quickfix buffer
-        local qf_buf = vim.fn.getqflist({ bufnr = 0 }).bufnr
-        return qf_buf
-      end,
-    },
-  },
-})
-
-vim.keymap.set("n", "<leader>qf", function()
-  quickfix:toggle()
 end)
 ```
 
@@ -709,49 +425,59 @@ function M.setup(opts)
   -- Create main experience
   local main_exp = tfling.create({
     id = "my-plugin-main",
-    layout = {
-      type = "split",
-      config = {
-        direction = "horizontal",
-        size = "100%",
-      },
-      children = {
-        {
-          type = "split",
-          config = {
-            direction = "vertical",
-            size = "30%",
-          },
-          buffer = {
-            type = "scratch",
-            options = {
-              filetype = "my-plugin-list",
-            },
-          },
-        },
-        {
-          type = "split",
-          config = {
-            direction = "vertical",
-            size = "70%",
-          },
-          buffer = {
-            type = "scratch",
-            options = {
-              filetype = "my-plugin-detail",
-            },
-          },
-        },
-      },
-    },
     hooks = {
-      after_show = function(exp)
-        -- Initialize plugin UI
-        M._init_ui(exp)
+      before_show = function(exp)
+        if #exp.windows > 0 then
+          return  -- Already shown
+        end
+        
+        -- Create list window (left)
+        local list_buf = vim.api.nvim_create_buf(true, true)
+        vim.bo[list_buf].filetype = "my-plugin-list"
+        vim.api.nvim_buf_set_lines(list_buf, 0, -1, false, {
+          "Item 1",
+          "Item 2",
+          "Item 3",
+        })
+        
+        vim.cmd("topleft vsplit")
+        vim.cmd("vertical resize 30")
+        local list_win = vim.api.nvim_get_current_win()
+        vim.api.nvim_win_set_buf(list_win, list_buf)
+        
+        -- Create detail window (right)
+        local detail_buf = vim.api.nvim_create_buf(true, true)
+        vim.bo[detail_buf].filetype = "my-plugin-detail"
+        
+        vim.cmd("wincmd l")
+        local detail_win = vim.api.nvim_get_current_win()
+        vim.api.nvim_win_set_buf(detail_win, detail_buf)
+        
+        -- Register
+        exp:register_window(list_win)
+        exp:register_window(detail_win)
+        exp:register_buffer(list_buf)
+        exp:register_buffer(detail_buf)
+        
+        -- Set up keymaps
+        vim.keymap.set("n", "q", function()
+          exp:hide()
+        end, { buffer = list_buf })
+        
+        vim.keymap.set("n", "<CR>", function()
+          local line = vim.api.nvim_get_current_line()
+          M._show_detail(exp, line)
+        end, { buffer = list_buf })
       end,
       before_hide = function(exp)
-        -- Save state
-        M._save_state(exp)
+        -- Close windows
+        for _, win_id in ipairs(exp.windows) do
+          if vim.api.nvim_win_is_valid(win_id) then
+            vim.api.nvim_win_close(win_id, true)
+          end
+        end
+        exp.windows = {}
+        exp.buffers = {}
       end,
     },
   })
@@ -765,28 +491,6 @@ function M.setup(opts)
   end)
 end
 
-function M._init_ui(exp)
-  local list_buf = exp.buffers[1]
-  local detail_buf = exp.buffers[2]
-  
-  -- Populate list buffer
-  vim.api.nvim_buf_set_lines(list_buf, 0, -1, false, {
-    "Item 1",
-    "Item 2",
-    "Item 3",
-  })
-  
-  -- Set up keymaps
-  vim.keymap.set("n", "q", function()
-    exp:hide()
-  end, { buffer = list_buf })
-  
-  vim.keymap.set("n", "<CR>", function()
-    local line = vim.api.nvim_get_current_line()
-    M._show_detail(exp, line)
-  end, { buffer = list_buf })
-end
-
 function M._show_detail(exp, item)
   local detail_buf = exp.buffers[2]
   vim.api.nvim_buf_set_lines(detail_buf, 0, -1, false, {
@@ -796,15 +500,82 @@ function M._show_detail(exp, item)
   })
 end
 
-function M._save_state(exp)
-  -- Save plugin state
-  exp.metadata.last_state = {
-    timestamp = vim.loop.now(),
-    -- ... other state
-  }
-end
-
 return M
 ```
 
-This example shows how a plugin developer would use Tfling v2 to create a toggleable UI with multiple panels, custom buffers, and lifecycle hooks.
+## Registration Options Examples
+
+### Persistent Windows
+
+```lua
+local exp = tfling.create({ id = "tool" })
+
+local win = create_window()
+exp:register_window(win, {
+  close_on_hide = false,  -- Keep window open when hiding
+  save_config = true,     -- Save config for restoration
+  restore_on_show = true, -- Restore config when showing
+})
+```
+
+### Ephemeral Windows
+
+```lua
+local exp = tfling.create({ id = "tool" })
+
+local win = create_window()
+exp:register_window(win, {
+  close_on_hide = true,   -- Close when hiding
+  close_on_destroy = true, -- Close when destroying
+})
+```
+
+### Persistent Buffers
+
+```lua
+local exp = tfling.create({ id = "tool" })
+
+local buf = create_buffer()
+exp:register_buffer(buf, {
+  persistent = true,       -- Keep buffer alive when hidden
+  delete_on_destroy = false, -- Don't delete on destroy
+})
+```
+
+## Dynamic Registration
+
+```lua
+local exp = tfling.create({ id = "dynamic-tool" })
+
+-- Register initial window
+local win1 = create_window()
+exp:register_window(win1)
+
+-- Later, add more windows dynamically
+local win2 = create_window()
+exp:register_window(win2)
+
+-- Remove a window
+exp:unregister_window(win1)
+```
+
+## Window Operations
+
+```lua
+local exp = tfling.get("my-tool")
+
+-- Resize a registered window
+exp:resize_window(exp.windows[1], {
+  width = 100,
+  height = 50,
+})
+
+-- Reposition a floating window
+exp:reposition_window(exp.windows[1], {
+  row = 20,
+  col = 30,
+})
+
+-- Focus a specific window
+exp:focus_window(exp.windows[1])
+```

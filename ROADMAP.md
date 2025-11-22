@@ -63,101 +63,112 @@ This document outlines the implementation plan for Tfling v2, breaking down the 
 - Basic experience creation and lifecycle
 - Simple layout support (single float or split)
 
-## Phase 2: Layout Engine (Priority: Critical)
+## Phase 2: Registration System (Priority: Critical)
 
-**Goal**: Implement the layout engine that creates windows, tabs, and splits according to layout specifications.
+**Goal**: Implement the registration system for windows, buffers, and tabs.
 
 ### Tasks
 
-1. **Window Creation** (`lua/tfling/v2/window.lua`)
-   - [ ] Floating window creation
-   - [ ] Split window creation (horizontal/vertical)
-   - [ ] Tab creation
-   - [ ] Container handling
-   - [ ] Window configuration calculation
-   - [ ] Window hierarchy tracking
-
-2. **Layout Engine** (`lua/tfling/v2/layout.lua` - expanded)
-   - [ ] Recursive layout traversal
-   - [ ] Nested layout support
-   - [ ] Layout-to-window mapping
-   - [ ] Window restoration from saved configs
-   - [ ] Layout validation and error handling
-
-3. **Geometry Calculations** (`lua/tfling/v2/geometry.lua`)
-   - [ ] Floating window position calculation
-   - [ ] Split size calculation (percentage/absolute)
-   - [ ] Window positioning algorithms
-   - [ ] Screen boundary handling
-
-4. **Window Registry** (`lua/tfling/v2/window.lua` - expanded)
+1. **Window Registration** (`lua/tfling/v2/registry.lua`)
+   - [ ] Window registration API
+   - [ ] Window validation
    - [ ] Window-to-experience mapping
-   - [ ] Window config saving/restoration
-   - [ ] Window cleanup on hide/destroy
-   - [ ] Window event handling (WinClosed, WinEnter)
+   - [ ] Window unregistration
+   - [ ] Window options handling
 
-5. **Tests**
-   - [ ] Unit tests for window creation
-   - [ ] Unit tests for layout parsing
-   - [ ] Integration tests for complex layouts
-   - [ ] E2E tests for multi-window experiences
+2. **Buffer Registration** (`lua/tfling/v2/registry.lua`)
+   - [ ] Buffer registration API
+   - [ ] Buffer validation
+   - [ ] Buffer-to-experience mapping
+   - [ ] Buffer unregistration
+   - [ ] Buffer options handling
 
-**Estimated Time**: 3-4 weeks
+3. **Tab Registration** (`lua/tfling/v2/registry.lua`)
+   - [ ] Tabpage registration API
+   - [ ] Tabpage validation
+   - [ ] Tab-to-experience mapping
+   - [ ] Tab unregistration
+   - [ ] Tab options handling
+
+4. **Registration Options** (`lua/tfling/v2/registry.lua`)
+   - [ ] Options parsing and validation
+   - [ ] Default options handling
+   - [ ] Options storage per element
+
+5. **Bulk Registration** (`lua/tfling/v2/registry.lua`)
+   - [ ] Bulk registration API
+   - [ ] Batch validation
+   - [ ] Error handling
+
+6. **Tests**
+   - [ ] Unit tests for registration
+   - [ ] Unit tests for validation
+   - [ ] Unit tests for unregistration
+   - [ ] Integration tests for registration flow
+
+**Estimated Time**: 2-3 weeks
 
 **Dependencies**: Phase 1
 
 **Deliverables**:
-- Complete layout engine
-- Support for nested layouts
-- Window creation and restoration
-- Complex multi-window experiences
+- Complete registration system
+- Window/buffer/tab registration APIs
+- Registration options support
+- Bulk registration support
 
-## Phase 3: Buffer Management (Priority: High)
+## Phase 3: Lifecycle Management (Priority: High)
 
-**Goal**: Implement buffer creation, management, and lifecycle handling.
+**Goal**: Implement show/hide/toggle lifecycle management with state saving and restoration.
 
 ### Tasks
 
-1. **Buffer Creation** (`lua/tfling/v2/buffer.lua`)
-   - [ ] Terminal buffer creation
-   - [ ] File buffer creation
-   - [ ] Scratch buffer creation
-   - [ ] Function-based buffer creation
-   - [ ] Buffer options application
+1. **State Saving** (`lua/tfling/v2/lifecycle.lua`)
+   - [ ] Window config saving
+   - [ ] Buffer state saving
+   - [ ] Tab state saving
+   - [ ] Cursor position saving
+   - [ ] View state saving
 
-2. **Terminal Integration**
-   - [ ] Terminal job management
-   - [ ] Terminal exit handling
-   - [ ] Terminal command sending
-   - [ ] Session providers (tmux, abduco)
+2. **State Restoration** (`lua/tfling/v2/lifecycle.lua`)
+   - [ ] Window config restoration
+   - [ ] Buffer state restoration
+   - [ ] Tab state restoration
+   - [ ] Cursor position restoration
+   - [ ] View state restoration
 
-3. **Buffer Lifecycle**
-   - [ ] Buffer persistence (persistent vs ephemeral)
-   - [ ] Buffer recreation on show
-   - [ ] Buffer cleanup on hide/destroy
-   - [ ] Buffer-to-experience mapping
+3. **Show Operation** (`lua/tfling/v2/lifecycle.lua`)
+   - [ ] Window validation and restoration
+   - [ ] Tab switching
+   - [ ] Focus management
+   - [ ] Invalid element handling
 
-4. **Buffer Registry** (`lua/tfling/v2/buffer.lua` - expanded)
-   - [ ] Buffer tracking
-   - [ ] Buffer spec storage
-   - [ ] Buffer validation
-   - [ ] Buffer event handling (BufEnter, BufDelete)
+4. **Hide Operation** (`lua/tfling/v2/lifecycle.lua`)
+   - [ ] State saving before hide
+   - [ ] Window closing (based on options)
+   - [ ] Tab closing (based on options)
+   - [ ] Buffer cleanup (based on options)
 
-5. **Tests**
-   - [ ] Unit tests for buffer creation
-   - [ ] Unit tests for terminal management
-   - [ ] Integration tests for buffer lifecycle
-   - [ ] E2E tests for persistent buffers
+5. **Window Cleanup** (`lua/tfling/v2/lifecycle.lua`)
+   - [ ] Invalid window detection
+   - [ ] Window cleanup on hide
+   - [ ] Window cleanup on destroy
+   - [ ] Registry cleanup
+
+6. **Tests**
+   - [ ] Unit tests for state saving
+   - [ ] Unit tests for state restoration
+   - [ ] Integration tests for show/hide
+   - [ ] E2E tests for lifecycle
 
 **Estimated Time**: 2-3 weeks
 
 **Dependencies**: Phase 2
 
 **Deliverables**:
-- Complete buffer management system
-- Terminal support with session providers
-- Buffer lifecycle handling
-- Buffer persistence options
+- Complete lifecycle management
+- State saving and restoration
+- Show/hide/toggle operations
+- Window cleanup handling
 
 ## Phase 4: Hook System (Priority: High)
 
@@ -208,9 +219,53 @@ This document outlines the implementation plan for Tfling v2, breaking down the 
 - Event hooks working
 - Hook utilities and debugging
 
-## Phase 5: Advanced Features (Priority: Medium)
+## Phase 5: Window Operations (Priority: Medium)
 
-**Goal**: Implement advanced features like groups, dependencies, and dynamic layouts.
+**Goal**: Implement window manipulation and query APIs.
+
+### Tasks
+
+1. **Window Resize** (`lua/tfling/v2/experience.lua`)
+   - [ ] Resize floating windows
+   - [ ] Resize split windows
+   - [ ] Percentage and absolute sizing
+   - [ ] Relative sizing (+10%, -5%, etc.)
+
+2. **Window Reposition** (`lua/tfling/v2/experience.lua`)
+   - [ ] Reposition floating windows
+   - [ ] Position presets (center, top-left, etc.)
+   - [ ] Absolute and relative positioning
+
+3. **Window Focus** (`lua/tfling/v2/experience.lua`)
+   - [ ] Focus specific window
+   - [ ] Focus primary window
+   - [ ] Focus next/previous window
+
+4. **Query Methods** (`lua/tfling/v2/experience.lua`)
+   - [ ] Get registered windows
+   - [ ] Get registered buffers
+   - [ ] Get registered tabs
+   - [ ] Check if element is registered
+   - [ ] Get element options
+
+5. **Tests**
+   - [ ] Unit tests for window operations
+   - [ ] Unit tests for query methods
+   - [ ] Integration tests for operations
+
+**Estimated Time**: 1-2 weeks
+
+**Dependencies**: Phase 1, Phase 2, Phase 3
+
+**Deliverables**:
+- Window resize API
+- Window reposition API
+- Window focus API
+- Query methods API
+
+## Phase 6: Advanced Features (Priority: Medium)
+
+**Goal**: Implement advanced features like groups, dependencies, and bulk operations.
 
 ### Tasks
 
@@ -226,75 +281,25 @@ This document outlines the implementation plan for Tfling v2, breaking down the 
    - [ ] Circular dependency detection
    - [ ] Automatic dependency show/hide
 
-3. **Dynamic Layouts**
-   - [ ] Layout modification API
-   - [ ] Layout reapplication
-   - [ ] Layout diffing (for optimization)
-
-4. **Window Operations** (`lua/tfling/v2/experience.lua` - expanded)
-   - [ ] Window resize
-   - [ ] Window reposition
-   - [ ] Window focus
-   - [ ] Window close
-
-5. **Layout Builder** (`lua/tfling/v2/builder.lua`)
-   - [ ] Fluent API implementation
-   - [ ] Builder state management
-   - [ ] Layout construction
-   - [ ] Builder validation
-
-6. **Tests**
-   - [ ] Unit tests for groups
-   - [ ] Unit tests for dependencies
-   - [ ] Unit tests for dynamic layouts
-   - [ ] Integration tests for advanced features
-
-**Estimated Time**: 3-4 weeks
-
-**Dependencies**: Phase 2, Phase 3, Phase 4
-
-**Deliverables**:
-- Experience groups
-- Dependency system
-- Dynamic layout modification
-- Window operations API
-- Layout builder
-
-## Phase 6: Compatibility & Migration (Priority: Medium)
-
-**Goal**: Provide compatibility layer for v1 users and migration tools.
-
-### Tasks
-
-1. **v1 Compatibility Layer** (`lua/tfling/v2/compat/v1.lua`)
-   - [ ] `tfling.term()` compatibility
-   - [ ] `tfling.buff()` compatibility
-   - [ ] Window config conversion
-   - [ ] Hook conversion (setup → hooks)
-
-2. **Migration Tools**
-   - [ ] Migration script/guide
-   - [ ] Config converter
-   - [ ] Deprecation warnings
-
-3. **Documentation**
-   - [ ] Migration guide
-   - [ ] API comparison
-   - [ ] Breaking changes document
+3. **Bulk Operations**
+   - [ ] Bulk registration API
+   - [ ] Batch show/hide operations
+   - [ ] Experience cloning
 
 4. **Tests**
-   - [ ] Compatibility layer tests
-   - [ ] Migration tests
-   - [ ] Backward compatibility tests
+   - [ ] Unit tests for groups
+   - [ ] Unit tests for dependencies
+   - [ ] Unit tests for bulk operations
+   - [ ] Integration tests for advanced features
 
-**Estimated Time**: 1-2 weeks
+**Estimated Time**: 2-3 weeks
 
 **Dependencies**: Phase 1-5
 
 **Deliverables**:
-- v1 compatibility layer
-- Migration tools and documentation
-- Backward compatibility maintained
+- Experience groups
+- Dependency system
+- Bulk operations
 
 ## Phase 7: Polish & Optimization (Priority: Low)
 
@@ -358,16 +363,11 @@ lua/tfling/v2/
   init.lua              -- Main entry point, exports API
   state.lua             -- StateManager implementation
   experience.lua        -- Experience class and methods
-  layout.lua            -- Layout engine and parsing
-  window.lua            -- Window creation and management
-  buffer.lua            -- Buffer creation and management
+  registry.lua          -- Window/buffer/tab registration
+  lifecycle.lua         -- Show/hide/toggle lifecycle
   hooks.lua             -- Hook system
-  geometry.lua          -- Geometry calculations
   groups.lua            -- Experience groups
-  builder.lua           -- Layout builder API
   util.lua              -- Utility functions
-  compat/
-    v1.lua              -- v1 compatibility layer
 ```
 
 ### Testing Strategy
@@ -415,17 +415,17 @@ lua/tfling/v2/
 ### Phase 1 Success
 - Can create and toggle simple experiences
 - State management works correctly
-- Basic layouts (float, split) work
+- Experience lifecycle works
 
 ### Phase 2 Success
-- Complex nested layouts work
-- Window restoration works
-- Multi-window experiences work
+- Window/buffer/tab registration works
+- Registration options work correctly
+- Bulk registration works
 
 ### Phase 3 Success
-- All buffer types work
-- Terminal integration works
-- Buffer lifecycle works correctly
+- State saving and restoration works
+- Show/hide operations work correctly
+- Window cleanup works
 
 ### Phase 4 Success
 - All hooks execute correctly
@@ -433,27 +433,30 @@ lua/tfling/v2/
 - Event hooks work
 
 ### Phase 5 Success
+- Window operations work correctly
+- Experience query methods work
+
+### Phase 6 Success
 - Groups work correctly
 - Dependencies work correctly
-- Dynamic layouts work
+- Bulk operations work
 
 ### Overall Success
 - API is intuitive and powerful
+- Registration model works smoothly
 - Performance is acceptable
 - Documentation is complete
-- Users can migrate from v1 easily
 
 ## Timeline Summary
 
 - **Phase 1**: 2-3 weeks
-- **Phase 2**: 3-4 weeks
+- **Phase 2**: 2-3 weeks
 - **Phase 3**: 2-3 weeks
 - **Phase 4**: 1-2 weeks
-- **Phase 5**: 3-4 weeks
-- **Phase 6**: 1-2 weeks
-- **Phase 7**: 2-3 weeks
+- **Phase 5**: 2-3 weeks
+- **Phase 6**: 2-3 weeks
 
-**Total Estimated Time**: 14-21 weeks (~3.5-5 months)
+**Total Estimated Time**: 11-17 weeks (~2.5-4 months)
 
 ## Next Steps
 
@@ -462,3 +465,15 @@ lua/tfling/v2/
 3. Begin Phase 1 implementation
 4. Set up testing infrastructure
 5. Create initial documentation
+
+## Design Changes from Original Plan
+
+### Removed Features
+- **Layout Engine**: Removed - plugins handle window creation
+- **Buffer Creation**: Removed - plugins handle buffer creation
+- **v1 Compatibility**: Removed - no compatibility layer needed
+
+### New Focus
+- **Registration Model**: Core feature - dynamic registration of UI elements
+- **State Management**: Focus on grouping and lifecycle, not creation
+- **Separation of Concerns**: Clear boundary between plugin creation and Tfling management

@@ -7,13 +7,13 @@ Tfling v2 is a **state management library** for Neovim that provides a flexible,
 ## Key Concepts
 
 ### Experience
-A logical grouping of windows/tabs/splits that form a cohesive user experience. Experiences can be toggled on/off as a unit.
+A logical grouping of windows/tabs/splits that form a cohesive user experience. Experiences can be toggled on/off as a unit. Acts as a registry for UI elements.
 
-### Layout
-Defines the structure of windows, tabs, and splits. Supports nested structures and combinations of float, split, tab, and container types.
+### Registration
+UI elements (windows, buffers, tabs) are registered with experiences. Tfling manages their lifecycle but doesn't create them.
 
-### Buffer Specification
-Describes what content to display: terminal, file, scratch buffer, or function-generated content.
+### Lifecycle Management
+Show/hide/toggle operations that save and restore window/buffer/tab state.
 
 ### Hooks
 Lifecycle and event hooks allow plugin developers to inject custom behavior at key points (before_show, after_show, on_focus, etc.).
@@ -26,9 +26,16 @@ local tfling = require("tfling.v2")
 -- Create an experience
 local exp = tfling.create({
   id = "my-tool",
-  layout = { ... },
   hooks = { ... },
 })
+
+-- Plugin creates window/buffer
+local buf = vim.api.nvim_create_buf(true, true)
+local win = vim.api.nvim_open_win(buf, true, { ... })
+
+-- Register with Tfling
+exp:register_window(win)
+exp:register_buffer(buf)
 
 -- Control the experience
 exp:show()
@@ -88,43 +95,56 @@ Window/Buffer (actual Neovim elements)
 
 ## Example Usage
 
-### Simple Floating Terminal
+### Simple Floating Window
 
 ```lua
-local term = tfling.create({
-  id = "quick-term",
-  layout = {
-    type = "float",
-    config = { width = "80%", height = "60%", position = "center" },
-    buffer = { type = "terminal", source = "bash" },
-  },
+local tfling = require("tfling.v2")
+
+-- Create experience
+local exp = tfling.create({ id = "quick-tool" })
+
+-- Plugin creates window
+local buf = vim.api.nvim_create_buf(true, true)
+local win = vim.api.nvim_open_win(buf, true, {
+  relative = "editor",
+  width = 50,
+  height = 10,
+  row = 10,
+  col = 30,
 })
-term:toggle()
+
+-- Register with Tfling
+exp:register_window(win)
+exp:register_buffer(buf)
+
+-- Toggle it
+exp:toggle()
 ```
 
-### Complex Multi-Window Layout
+### Multi-Window Experience
 
 ```lua
-local monitoring = tfling.create({
-  id = "monitoring",
-  layout = {
-    type = "container",
-    children = {
-      { type = "float", config = {...}, buffer = {...} },  -- CPU
-      { type = "float", config = {...}, buffer = {...} },  -- I/O
-      { type = "float", config = {...}, buffer = {...} },  -- Network
-    },
-  },
-})
+local exp = tfling.create({ id = "monitoring" })
+
+-- Create and register multiple windows
+local win1 = create_cpu_window()
+local win2 = create_io_window()
+local win3 = create_network_window()
+
+exp:register_window(win1)
+exp:register_window(win2)
+exp:register_window(win3)
+
+exp:toggle()
 ```
 
 ## Design Principles
 
-1. **State Management First**: Core is about managing UI state
-2. **Low-Level API**: Provides primitives for composition
-3. **Extensible**: Hook system for custom behavior
-4. **Flexible**: Supports any layout combination
-5. **Backward Compatible**: v1 compatibility layer
+1. **State Management Only**: Focuses on grouping and lifecycle, not creation
+2. **Dynamic Registration**: UI elements registered, not created by Tfling
+3. **Separation of Concerns**: Plugins create, Tfling manages
+4. **Low-Level API**: Provides primitives for registration and lifecycle
+5. **Extensible**: Hook system for custom behavior
 
 ## Next Steps
 
@@ -154,21 +174,18 @@ lua/tfling/v2/
   init.lua              -- Main API
   state.lua             -- StateManager
   experience.lua        -- Experience class
-  layout.lua            -- Layout engine
-  window.lua            -- Window management
-  buffer.lua            -- Buffer management
+  registry.lua          -- Window/buffer/tab registration
+  lifecycle.lua         -- Show/hide/toggle lifecycle
   hooks.lua             -- Hook system
-  geometry.lua          -- Geometry calculations
   groups.lua            -- Experience groups
-  builder.lua           -- Layout builder
-  compat/v1.lua         -- v1 compatibility
+  util.lua              -- Utility functions
 ```
 
 ## Success Metrics
 
-- ✅ Can create complex multi-window experiences
-- ✅ Experiences toggle cleanly
-- ✅ Layouts restore correctly
+- ✅ Can register and manage multiple windows/buffers/tabs
+- ✅ Experiences toggle cleanly with state restoration
+- ✅ Registration model works smoothly
 - ✅ Hooks execute reliably
 - ✅ Performance is acceptable
 - ✅ API is intuitive
