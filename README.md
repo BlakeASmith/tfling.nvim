@@ -177,6 +177,32 @@ require("tfling").buff({
 })
 ```
 
+**Setting Custom Keybinds:**
+
+The `setup` function runs every time the buffer is entered, making it ideal for setting buffer-local keymaps.
+
+```lua
+require("tfling").buff({
+  name = "my_tool",
+  init = "Man bash",
+  setup = function(term)
+    -- Set a keymap to close the window with 'q'
+    vim.keymap.set("n", "q", function()
+      vim.api.nvim_win_close(term.win_id, true)
+    end, { buffer = term.bufnr, silent = true })
+    
+    -- Set a keymap to resize the window
+    vim.keymap.set("n", "<C-Right>", function()
+      term.win.resize({ width = "+5%" })
+    end, { buffer = term.bufnr, silent = true })
+  end,
+  win = {
+    width = "60%",
+    height = "80%",
+  },
+})
+```
+
 ## License
 
 MIT
