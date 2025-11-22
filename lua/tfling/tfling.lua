@@ -686,6 +686,59 @@ vim.api.nvim_create_user_command("TflingNext", function(opts)
     end
 end, { nargs = "?" })
 
+vim.api.nvim_create_user_command("TflingPrev", function(opts)
+    local target_group = opts.args ~= "" and opts.args or last_opened_group
+    
+    if not target_group or not groups[target_group] then
+        vim.notify("Group not found: " .. (target_group or "nil"), vim.log.levels.WARN)
+        return
+    end
+    
+    local group_terms = groups[target_group]
+    if #group_terms == 0 then return end
+    
+    local current_term = get_current_term()
+    local current_name = current_term and current_term.name
+    
+    local prev_name
+    
+    -- If current term is in the target group, find prev
+    local current_idx = nil
+    for i, name in ipairs(group_terms) do
+        if name == current_name then
+            current_idx = i
+            break
+        end
+    end
+    
+    if current_idx then
+        local prev_idx = ((current_idx - 2) % #group_terms) + 1
+        prev_name = group_terms[prev_idx]
+    else
+        -- Not in group (or no term active), pick last active or first
+        prev_name = group_history[target_group] or group_terms[1]
+    end
+    
+    -- Switch to it
+    if prev_name then
+        local instance = terms[prev_name]
+        
+        -- If we are in a floating window and switching, hide the current one
+        if current_term and current_term ~= instance and current_term.win_opts and current_term.win_opts.type == "floating" then
+             current_term:hide()
+        end
+        
+        -- Call M.term with stored opts to ensure autocmds and setup
+        if instance.opts then
+             M.term(instance.opts)
+        else
+             -- Fallback if no opts
+             local win_config = defaults.apply_win_defaults({ type = "floating" })
+             instance:toggle({ win = win_config })
+        end
+    end
+end, { nargs = "?" })
+
 vim.api.nvim_create_user_command("TFlingNextGroup", function()
     if #group_order == 0 then return end
     
@@ -712,6 +765,48 @@ vim.api.nvim_create_user_command("TFlingNextGroup", function()
     
     -- Go to current buffer of next group
     local term_name = group_history[next_group] or groups[next_group][1]
+    if term_name then
+        local instance = terms[term_name]
+        
+        if current_term and current_term ~= instance and current_term.win_opts and current_term.win_opts.type == "floating" then
+             current_term:hide()
+        end
+        
+        if instance.opts then
+             M.term(instance.opts)
+        else
+             local win_config = defaults.apply_win_defaults({ type = "floating" })
+             instance:toggle({ win = win_config })
+        end
+    end
+end, {})
+
+vim.api.nvim_create_user_command("TFlingPrevGroup", function()
+    if #group_order == 0 then return end
+    
+    local current_term = get_current_term()
+    local current_group = (current_term and current_term.group) or last_opened_group
+    
+    local current_group_idx = nil
+    if current_group then
+        for i, gname in ipairs(group_order) do
+            if gname == current_group then
+                current_group_idx = i
+                break
+            end
+        end
+    end
+    
+    local prev_group
+    if current_group_idx then
+        local prev_idx = ((current_group_idx - 2) % #group_order) + 1
+        prev_group = group_order[prev_idx]
+    else
+        prev_group = group_order[1]
+    end
+    
+    -- Go to current buffer of prev group
+    local term_name = group_history[prev_group] or groups[prev_group][1]
     if term_name then
         local instance = terms[term_name]
         
