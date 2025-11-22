@@ -188,6 +188,8 @@ function Terminal:open(opts)
 				vim.cmd(self.init)
 			elseif type(self.init) == "function" then
 				self.init(self)
+			else
+				vim.notify("tfling: 'init' must be a string or function", vim.log.levels.ERROR)
 			end
 		end)
 	end
