@@ -234,6 +234,16 @@ local group_order = {}
 local group_history = {}
 local last_opened_group = nil
 
+local function update_history(name)
+    local term = terms[name]
+    if not term then return end
+    local group = term.group
+    if group then
+        group_history[group] = name
+        last_opened_group = group
+    end
+end
+
 --- @class termResizeOptions
 --- @field width? number|string width as number, percentage ("50%"), or relative ("+5%")
 --- @field height? number|string height as number, percentage ("50%"), or relative ("+5%")
@@ -321,9 +331,6 @@ function M.term(opts)
         table.insert(groups[group], opts.name)
     end
     
-    last_opened_group = group
-    group_history[group] = opts.name
-
 	-- Handle tmux-backed terminals
 	local actual_cmd = opts.cmd
 	local cmd_table = vim.split(opts.cmd, " ")
@@ -355,6 +362,8 @@ function M.term(opts)
     terms[opts.name].opts = opts
     terms[opts.name].name = opts.name
     terms[opts.name].group = group
+    
+    update_history(opts.name)
 
 	-- Apply defaults to win configuration
 	local win_config = defaults.apply_win_defaults(opts.win)
@@ -625,6 +634,22 @@ function M.setup(opts)
 	if opts.send_delay ~= nil then
 		Config.send_delay = opts.send_delay
 	end
+
+    -- Autocommand to track active buffer
+    vim.api.nvim_create_autocmd({"BufEnter", "WinEnter"}, {
+        pattern = "*",
+        callback = function()
+            if vim.bo.filetype == "tfling" then
+                local buf = vim.api.nvim_get_current_buf()
+                for name, instance in pairs(terms) do
+                    if instance.bufnr == buf then
+                        update_history(name)
+                        break
+                    end
+                end
+            end
+        end
+    })
 end
 
 -- Helper to get current term instance
@@ -647,14 +672,26 @@ vim.api.nvim_create_user_command("TflingNext", function(opts)
     local current_term = get_current_term()
     local current_name = current_term and current_term.name
     
+    -- If currently focused term is NOT in the target group, ignore it for cycling index
+    if current_name and terms[current_name].group ~= target_group then
+        current_name = nil
+    end
+
+    -- If no valid current term in window, look at history
+    if not current_name then
+        current_name = group_history[target_group]
+    end
+
     local next_name
     
     -- If current term is in the target group, find next
     local current_idx = nil
-    for i, name in ipairs(group_terms) do
-        if name == current_name then
-            current_idx = i
-            break
+    if current_name then
+        for i, name in ipairs(group_terms) do
+            if name == current_name then
+                current_idx = i
+                break
+            end
         end
     end
     
@@ -700,14 +737,26 @@ vim.api.nvim_create_user_command("TflingPrev", function(opts)
     local current_term = get_current_term()
     local current_name = current_term and current_term.name
     
+    -- If currently focused term is NOT in the target group, ignore it for cycling index
+    if current_name and terms[current_name].group ~= target_group then
+        current_name = nil
+    end
+
+    -- If no valid current term in window, look at history
+    if not current_name then
+        current_name = group_history[target_group]
+    end
+    
     local prev_name
     
     -- If current term is in the target group, find prev
     local current_idx = nil
-    for i, name in ipairs(group_terms) do
-        if name == current_name then
-            current_idx = i
-            break
+    if current_name then
+        for i, name in ipairs(group_terms) do
+            if name == current_name then
+                current_idx = i
+                break
+            end
         end
     end
     
