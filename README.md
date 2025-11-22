@@ -107,6 +107,102 @@ local attach_cmd = tmux.attach_session({
 3. **Database Connections**: Maintain persistent database connections
 4. **Build Processes**: Keep build processes running in the background
 
+### Generic Buffers
+
+You can also use tfling to manage regular buffers using `M.buff`. This allows you to open any file or run any Vim command in a floating or split window with the same window management capabilities as terminals.
+
+#### Examples
+
+**Open Oil.nvim as a file manager:**
+
+```lua
+require("tfling").buff({
+  name = "file_manager",
+  init = "Oil", -- Vim command to run
+  win = {
+    type = "floating",
+    position = "center",
+    width = "80%",
+    height = "80%",
+  },
+})
+```
+
+**Open Netrw:**
+
+```lua
+require("tfling").buff({
+  name = "netrw",
+  init = "Ex",
+  win = {
+    position = "left-center",
+    width = "30%",
+  },
+})
+```
+
+**Quick Access to init.lua:**
+
+```lua
+require("tfling").buff({
+  name = "config",
+  init = "edit $MYVIMRC",
+  win = {
+    type = "floating",
+    width = "70%",
+    height = "70%",
+  },
+})
+```
+
+**Custom Lua Initialization:**
+
+```lua
+require("tfling").buff({
+  name = "scratchpad",
+  init = function(term)
+    -- 'term' is the tfling instance
+    -- Set buffer content, options, etc.
+    vim.api.nvim_buf_set_lines(term.bufnr, 0, -1, false, {
+      "# Scratchpad",
+      "",
+      "Write your notes here...",
+    })
+    vim.bo[term.bufnr].filetype = "markdown"
+  end,
+  win = {
+    position = "right-center",
+    width = "40%",
+  },
+})
+```
+
+**Setting Custom Keybinds:**
+
+The `setup` function runs every time the buffer is entered, making it ideal for setting buffer-local keymaps.
+
+```lua
+require("tfling").buff({
+  name = "my_tool",
+  init = "Man bash",
+  setup = function(term)
+    -- Set a keymap to close the window with 'q'
+    vim.keymap.set("n", "q", function()
+      vim.api.nvim_win_close(term.win_id, true)
+    end, { buffer = term.bufnr, silent = true })
+    
+    -- Set a keymap to resize the window
+    vim.keymap.set("n", "<C-Right>", function()
+      term.win.resize({ width = "+5%" })
+    end, { buffer = term.bufnr, silent = true })
+  end,
+  win = {
+    width = "60%",
+    height = "80%",
+  },
+})
+```
+
 ## License
 
 MIT
