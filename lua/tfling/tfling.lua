@@ -337,7 +337,7 @@ local function create_tfling(opts)
 	if opts.name == nil then
 		local source = opts.cmd or (type(opts.init) == "string" and opts.init)
 		if source then
-			opts.name = source:gsub("[^%w%-_]", "_")
+			opts.name = source
 		else
 			vim.notify("tfling: 'name', 'cmd' or 'init' is required", vim.log.levels.ERROR)
 			return
