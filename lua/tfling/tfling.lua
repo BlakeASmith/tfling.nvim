@@ -90,6 +90,25 @@ function New(config)
 	instance.job_id = nil
 
 	if config.cmd then
+		-- Handle session providers (tmux/abduco)
+		local actual_cmd = config.cmd
+		if config.tmux or config.abduco then
+			local cmd_table = vim.split(config.cmd, " ")
+			local session_name = "tfling-" .. (config.name or config.cmd)
+			local sessions = require("tfling.sessions")
+			
+			local provider = nil
+			if config.tmux then
+				provider = sessions.tmux
+			elseif config.abduco then
+				provider = sessions.abduco
+			end
+
+			if provider ~= nil then
+				actual_cmd = table.concat(provider.create_or_attach_cmd({ session_id = session_name, cmd = cmd_table }), " ")
+			end
+		end
+
 		instance.init = function(term)
 			local on_exit = vim.schedule_wrap(function()
 				if active_instances[term.win_id] then
@@ -99,7 +118,7 @@ function New(config)
 				term.win_id = nil
 				term.job_id = nil
 			end)
-			term.job_id = vim.fn.termopen(term.cmd, { on_exit = on_exit })
+			term.job_id = vim.fn.termopen(actual_cmd, { on_exit = on_exit })
 			vim.cmd("startinsert")
 		end
 		return instance
@@ -326,34 +345,17 @@ function M.term(opts)
 		end
 	end
 
-	-- Handle tmux-backed terminals
-	local actual_cmd = opts.cmd
-	if opts.cmd then
-		local cmd_table = vim.split(opts.cmd, " ")
-		local session_name = "tfling-" .. (opts.name or opts.cmd)
-		local sessions = require("tfling.sessions")
-
-		local provider = nil
-		if opts.tmux then
-			provider = sessions.tmux
-		elseif opts.abduco then
-			provider = sessions.abduco
-		end
-
-		if provider ~= nil then
-			actual_cmd = table.concat(provider.create_or_attach_cmd({ session_id = session_name, cmd = cmd_table }), " ")
-		end
-	end
-
 	-- Capture selected text BEFORE any buffer operations
 	local captured_selected_text = get_selected_text()
 
 	if terms[opts.name] == nil then
 		terms[opts.name] = New({
-			cmd = actual_cmd,
+			cmd = opts.cmd,
 			bufnr = opts.bufnr,
 			name = opts.name,
 			init = opts.init,
+			tmux = opts.tmux,
+			abduco = opts.abduco,
 			win_opts = {}, -- Legacy support
 		})
 	end
@@ -376,7 +378,7 @@ function M.term(opts)
 				bufnr = terms[opts.name].bufnr,
 				win_id = terms[opts.name].win_id,
 				name = opts.name,
-				cmd = actual_cmd,
+				cmd = opts.cmd,
 				selected_text = captured_selected_text, -- Use the captured text
 				-- Helper function to send commands to this terminal
 				send = function(command)
