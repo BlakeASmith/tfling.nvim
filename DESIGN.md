@@ -2,7 +2,7 @@
 
 ## Overview
 
-Tfling v2 is a **state management library** for Neovim that provides a flexible, low-level API for plugin developers to create toggleable screen experiences. Tfling **does not create** windows, buffers, tabs, or splits. Instead, it manages the **grouping** of existing UI elements and provides lifecycle management (show/hide/toggle) for those groups.
+Tfling v2 is a **state management library** for Neovim that provides a flexible, low-level API for plugin developers to create toggleable screen experiences. Tfling **does not create** windows or tabs. Instead, it manages the **grouping** of existing UI elements and provides lifecycle management (show/hide/toggle) for those groups.
 
 ## Core Philosophy
 
@@ -16,14 +16,13 @@ Tfling v2 is a **state management library** for Neovim that provides a flexible,
 
 ### Experience
 
-An **Experience** is a logical grouping of windows, buffers, tabs, and splits that can be managed together. It acts as a registry and lifecycle manager for UI elements.
+An **Experience** is a logical grouping of windows and tabs that can be managed together. It acts as a registry and lifecycle manager for UI elements. Buffers are implicitly managed through windows (windows display buffers).
 
 ```lua
 Experience {
   id: string                    -- Unique identifier
   state: "hidden" | "visible"  -- Current state
   windows: number[]            -- Registered window IDs
-  buffers: number[]            -- Registered buffer IDs
   tabs: number[]               -- Registered tabpage IDs
   metadata: table              -- Arbitrary data for hooks
   hooks: Hooks                 -- Lifecycle hooks
@@ -58,7 +57,7 @@ local exp = tfling.create({
 local buf = vim.api.nvim_create_buf(true, true)
 local win = vim.api.nvim_open_win(buf, true, { ... })
 exp:register_window(win)
-exp:register_buffer(buf)
+-- Buffers are implicitly managed through windows
 
 -- Manage lifecycle
 exp:show()
@@ -72,24 +71,20 @@ exp:destroy()
 ```lua
 -- Register elements
 exp:register_window(win_id, options?)
-exp:register_buffer(buf_id, options?)
 exp:register_tab(tab_id, options?)
 
 -- Unregister elements
 exp:unregister_window(win_id)
-exp:unregister_buffer(buf_id)
 exp:unregister_tab(tab_id)
 
 -- Bulk registration
 exp:register({
   windows = { win_id1, win_id2 },
-  buffers = { buf_id1, buf_id2 },
   tabs = { tab_id1 },
 })
 
 -- Query registered elements
 local windows = exp:get_windows()
-local buffers = exp:get_buffers()
 local tabs = exp:get_tabs()
 ```
 
@@ -102,12 +97,6 @@ local tabs = exp:get_tabs()
   restore_on_show = true,    -- Restore window config when showing (default: true)
   close_on_hide = false,     -- Close window when hiding (default: false)
   close_on_destroy = true,   -- Close window when destroying (default: true)
-}
-
--- Buffer options
-{
-  persistent = true,         -- Keep buffer when hiding (default: true)
-  delete_on_destroy = false, -- Delete buffer when destroying (default: false)
 }
 
 -- Tab options
@@ -130,10 +119,8 @@ Hooks {
   before_destroy: function(experience) -> nil | false
   after_destroy: function(experience) -> nil
   on_window_registered: function(experience, window_id) -> nil
-  on_buffer_registered: function(experience, buffer_id) -> nil
   on_tab_registered: function(experience, tab_id) -> nil
   on_window_closed: function(experience, window_id) -> nil
-  on_buffer_deleted: function(experience, buffer_id) -> nil
   on_tab_closed: function(experience, tab_id) -> nil
 }
 ```
@@ -175,7 +162,6 @@ StateManager {
   experiences: Map<id, Experience>
   active_experiences: Set<id>
   window_to_experience: Map<window_id, experience_id>
-  buffer_to_experience: Map<buffer_id, experience_id>
   tab_to_experience: Map<tab_id, experience_id>
 }
 ```
@@ -202,12 +188,12 @@ StateManager {
 
 Tfling saves window configurations when hiding:
 - Window config (`nvim_win_get_config()`)
-- Buffer ID
+- Buffer ID (which buffer the window displays)
 - Cursor position
 - View state (scroll position)
 - Window options
 
-When showing, windows are restored to their saved configuration.
+When showing, windows are restored to their saved configuration, including the buffer they display.
 
 ## Usage Patterns
 
@@ -220,7 +206,7 @@ local exp = tfling.create({ id = "tool" })
 local buf = vim.api.nvim_create_buf(true, true)
 local win = vim.api.nvim_open_win(buf, true, config)
 exp:register_window(win)
-exp:register_buffer(buf)
+-- Buffer is implicitly managed through the window
 
 exp:toggle()
 ```
@@ -237,7 +223,7 @@ local exp = tfling.create({
         local buf = create_buffer()
         local win = create_window(buf)
         exp:register_window(win)
-        exp:register_buffer(buf)
+        -- Buffer is implicitly managed through the window
       end
     end,
     before_hide = function(exp)
@@ -248,7 +234,6 @@ local exp = tfling.create({
         end
       end
       exp.windows = {}
-      exp.buffers = {}
     end,
   },
 })
@@ -279,7 +264,7 @@ exp:toggle()
 - Basic show/hide functionality
 
 ### Phase 2: Registration System (2-3 weeks)
-- Window/buffer/tab registration APIs
+- Window/tab registration APIs
 - Registration options
 - Bulk registration
 
@@ -319,7 +304,7 @@ lua/tfling/v2/
   init.lua              -- Main entry point
   state.lua             -- StateManager
   experience.lua        -- Experience class
-  registry.lua          -- Window/buffer/tab registration
+  registry.lua          -- Window/tab registration
   lifecycle.lua         -- Show/hide/toggle lifecycle
   hooks.lua             -- Hook system
   groups.lua            -- Experience groups
@@ -329,7 +314,7 @@ lua/tfling/v2/
 ## Key Design Decisions
 
 - **No Layout Engine**: Plugins handle window creation
-- **No Buffer Creation**: Plugins handle buffer creation
+- **Window/Tab Primitives Only**: Only windows and tabs are managed (buffers are implicit via windows)
 - **Registration Model**: Core feature - dynamic registration of UI elements
 - **State Management**: Focus on grouping and lifecycle, not creation
 - **Separation of Concerns**: Clear boundary between plugin creation and Tfling management
