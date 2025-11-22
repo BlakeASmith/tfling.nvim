@@ -77,7 +77,7 @@ function Terminal:_calculate_floating_geometry(win_config)
 end
 
 function New(config)
-	if not config.cmd and not config.bufnr and not config.name and not config.init then
+	if not (config.cmd or config.bufnr or config.name or config.init) then
 		vim.notify("FloatingTerm:new() requires 'cmd', 'bufnr', 'name' or 'init'", vim.log.levels.ERROR)
 		return
 	end
@@ -102,7 +102,10 @@ function New(config)
 			term.job_id = vim.fn.termopen(term.cmd, { on_exit = on_exit })
 			vim.cmd("startinsert")
 		end
-	elseif config.init then
+		return instance
+	end
+
+	if config.init then
 		instance.init = config.init
 	end
 
@@ -184,13 +187,18 @@ function Terminal:open(opts)
 
 	if self.init then
 		vim.api.nvim_win_call(self.win_id, function()
-			if type(self.init) == "string" then
+			local init_type = type(self.init)
+			if init_type == "string" then
 				vim.cmd(self.init)
-			elseif type(self.init) == "function" then
-				self.init(self)
-			else
-				vim.notify("tfling: 'init' must be a string or function", vim.log.levels.ERROR)
+				return
 			end
+
+			if init_type == "function" then
+				self.init(self)
+				return
+			end
+
+			vim.notify("tfling: 'init' must be a string or function", vim.log.levels.ERROR)
 		end)
 	end
 end
@@ -328,10 +336,10 @@ function M.term(opts)
 		local provider = nil
 		if opts.tmux then
 			provider = sessions.tmux
-		end
-		if opts.abduco then
+		elseif opts.abduco then
 			provider = sessions.abduco
 		end
+
 		if provider ~= nil then
 			actual_cmd = table.concat(provider.create_or_attach_cmd({ session_id = session_name, cmd = cmd_table }), " ")
 		end
