@@ -77,15 +77,15 @@ function Terminal:_calculate_floating_geometry(win_config)
 end
 
 function New(config)
-	if not config.cmd then
-		vim.notify("FloatingTerm:new() requires 'cmd'", vim.log.levels.ERROR)
+	if not config.cmd and not config.bufnr and not config.name then
+		vim.notify("FloatingTerm:new() requires 'cmd', 'bufnr', or 'name'", vim.log.levels.ERROR)
 		return
 	end
 
 	local instance = setmetatable({}, Terminal)
 	instance.cmd = config.cmd
 	instance.win_opts = config.win_opts or {} -- Legacy support
-	instance.bufnr = nil
+	instance.bufnr = config.bufnr
 	instance.win_id = nil
 	instance.job_id = nil
 	return instance
@@ -144,7 +144,9 @@ function Terminal:open(opts)
 		end
 		active_instances[self.win_id] = self
 		self:setup_win_options()
-		vim.cmd("startinsert")
+		if self.cmd then
+			vim.cmd("startinsert")
+		end
 		return
 	end
 
@@ -171,10 +173,12 @@ function Terminal:open(opts)
 		self.job_id = nil
 	end)
 
-	vim.api.nvim_win_call(self.win_id, function()
-		self.job_id = vim.fn.termopen(self.cmd, { on_exit = on_exit })
-		vim.cmd("startinsert")
-	end)
+	if self.cmd then
+		vim.api.nvim_win_call(self.win_id, function()
+			self.job_id = vim.fn.termopen(self.cmd, { on_exit = on_exit })
+			vim.cmd("startinsert")
+		end)
+	end
 end
 
 function Terminal:_create_split_window(win_config)
@@ -290,24 +294,31 @@ function M.term(opts)
 
 	-- Set default name to cmd if not provided
 	if opts.name == nil then
-		opts.name = opts.cmd
+		if opts.cmd then
+			opts.name = opts.cmd
+		else
+			vim.notify("tfling: 'name' or 'cmd' is required", vim.log.levels.ERROR)
+			return
+		end
 	end
 
 	-- Handle tmux-backed terminals
 	local actual_cmd = opts.cmd
-	local cmd_table = vim.split(opts.cmd, " ")
-	local session_name = "tfling-" .. (opts.name or opts.cmd)
-	local sessions = require("tfling.sessions")
+	if opts.cmd then
+		local cmd_table = vim.split(opts.cmd, " ")
+		local session_name = "tfling-" .. (opts.name or opts.cmd)
+		local sessions = require("tfling.sessions")
 
-	local provider = nil
-	if opts.tmux then
-		provider = sessions.tmux
-	end
-	if opts.abduco then
-		provider = sessions.abduco
-	end
-	if provider ~= nil then
-		actual_cmd = table.concat(provider.create_or_attach_cmd({ session_id = session_name, cmd = cmd_table }), " ")
+		local provider = nil
+		if opts.tmux then
+			provider = sessions.tmux
+		end
+		if opts.abduco then
+			provider = sessions.abduco
+		end
+		if provider ~= nil then
+			actual_cmd = table.concat(provider.create_or_attach_cmd({ session_id = session_name, cmd = cmd_table }), " ")
+		end
 	end
 
 	-- Capture selected text BEFORE any buffer operations
@@ -316,6 +327,8 @@ function M.term(opts)
 	if terms[opts.name] == nil then
 		terms[opts.name] = New({
 			cmd = actual_cmd,
+			bufnr = opts.bufnr,
+			name = opts.name,
 			win_opts = {}, -- Legacy support
 		})
 	end
@@ -330,12 +343,8 @@ function M.term(opts)
 		-- reset each time we enter
 		clear = true,
 	})
-	-- on terminal enter (the window opening)
-	vim.api.nvim_create_autocmd("TermEnter", {
-		group = augroup_name,
-		-- only apply in the buffer created for this program
-		buffer = terms[opts.name].bufnr,
-		callback = function()
+
+	local function on_enter()
 			-- Create a table with terminal details to pass to the callback
 			local term_details = {
 				job_id = terms[opts.name].job_id,
@@ -569,8 +578,20 @@ function M.term(opts)
 			}
 			Config.always(term_details)
 			opts.setup(term_details)
-		end,
+		end
+
+	-- on buffer enter (works for both terminal and non-terminal buffers)
+	vim.api.nvim_create_autocmd("BufEnter", {
+		group = augroup_name,
+		-- only apply in the buffer created for this program
+		buffer = terms[opts.name].bufnr,
+		callback = on_enter,
 	})
+
+	-- Run immediately if we are already in the buffer (since the first BufEnter happened during toggle)
+	if vim.api.nvim_get_current_buf() == terms[opts.name].bufnr then
+		on_enter()
+	end
 end
 
 Config = {
