@@ -50,7 +50,10 @@ local tfling = require("tfling.v2")
 -- Create an experience
 local exp = tfling.create({
   id = "my-tool",
-  hooks = { ... },
+  hooks = {
+    onShow = function(exp) ... end,
+    onHide = function(exp) ... end,
+  },
 })
 
 -- Register UI elements (created by plugin)
@@ -92,18 +95,11 @@ local tabs = exp:get_tabs()
 
 ```lua
 Hooks {
-  before_create: function(experience) -> nil | false  -- Return false to cancel
-  after_create: function(experience) -> nil
-  before_show: function(experience) -> nil | false
-  after_show: function(experience) -> nil
-  before_hide: function(experience) -> nil | false
-  after_hide: function(experience) -> nil
-  before_destroy: function(experience) -> nil | false
-  after_destroy: function(experience) -> nil
+  onShow: function(experience) -> nil
+  onHide: function(experience) -> nil
   on_window_registered: function(experience, window_id) -> nil
   on_tab_registered: function(experience, tab_id) -> nil
   on_window_closed: function(experience, window_id) -> nil
-  on_tab_closed: function(experience, tab_id) -> nil
 }
 ```
 
@@ -151,19 +147,17 @@ StateManager {
 ### Lifecycle Operations
 
 **Show:**
-1. Execute `before_show` hook
-2. Show dependencies first
-3. Restore window configurations
-4. Restore tab states
-5. Focus primary window
-6. Execute `after_show` hook
+1. Show dependencies first
+2. Restore window configurations
+3. Restore tab states
+4. Focus primary window
+5. Execute `onShow` hook
 
 **Hide:**
-1. Execute `before_hide` hook
-2. Hide dependents first
-3. Save window configurations
-4. Save tab states
-5. Execute `after_hide` hook
+1. Hide dependents first
+2. Save window configurations
+3. Save tab states
+4. Execute `onHide` hook
 
 ### State Saving
 
@@ -198,7 +192,7 @@ exp:toggle()
 local exp = tfling.create({
   id = "lazy-tool",
   hooks = {
-    before_show = function(exp)
+    onShow = function(exp)
       if #exp.windows == 0 then
         -- Create windows only when showing
         local buf = create_buffer()
@@ -207,7 +201,7 @@ local exp = tfling.create({
         -- Buffer is implicitly managed through the window
       end
     end,
-    before_hide = function(exp)
+    onHide = function(exp)
       -- Close windows when hiding
       for _, win_id in ipairs(exp.windows) do
         if vim.api.nvim_win_is_valid(win_id) then
@@ -255,8 +249,8 @@ exp:toggle()
 
 ### Phase 4: Hook System (1-2 weeks)
 - Hook registration and execution
-- Lifecycle hooks
-- Event hooks
+- onShow/onHide hooks
+- Event hooks (window registered/closed, tab registered)
 
 ### Phase 5: Window Operations (1-2 weeks)
 - Window resize
