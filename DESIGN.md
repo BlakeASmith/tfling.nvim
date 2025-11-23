@@ -53,6 +53,7 @@ local exp = tfling.create({
   hooks = {
     onShow = function(exp) ... end,
     onHide = function(exp) ... end,
+    onDestroy = function(exp) ... end,
   },
 })
 
@@ -97,9 +98,7 @@ local tabs = exp:get_tabs()
 Hooks {
   onShow: function(experience) -> nil
   onHide: function(experience) -> nil
-  on_window_registered: function(experience, window_id) -> nil
-  on_tab_registered: function(experience, tab_id) -> nil
-  on_window_closed: function(experience, window_id) -> nil
+  onDestroy: function(experience) -> nil
 }
 ```
 
@@ -249,8 +248,7 @@ exp:toggle()
 
 ### Phase 4: Hook System (1-2 weeks)
 - Hook registration and execution
-- onShow/onHide hooks
-- Event hooks (window registered/closed, tab registered)
+- onShow/onHide/onDestroy hooks
 
 ### Phase 5: Window Operations (1-2 weeks)
 - Window resize
